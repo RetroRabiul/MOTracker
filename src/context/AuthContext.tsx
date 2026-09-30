@@ -81,6 +81,9 @@ function translateAuthError(error: AuthError, fallback: string): string {
   if (/sign ?ups? (not allowed|are disabled|is disabled)/i.test(message)) {
     return "Email sign up is disabled on this project";
   }
+  if (/provider is not enabled|unsupported provider/i.test(message)) {
+    return "This sign in provider is disabled";
+  }
   if (error.status === 0 || /failed to fetch|networkerror|network request failed/i.test(message)) {
     return "Network error. Check your connection and try again.";
   }
