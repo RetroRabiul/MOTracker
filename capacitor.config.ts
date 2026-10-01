@@ -9,7 +9,9 @@ const config: CapacitorConfig = {
   },
   android: {
     allowMixedContent: false,
-    captureInput: true,
+    // captureInput swaps in a BaseInputConnection, which has no Autofill support,
+    // so password managers cannot offer suggestions. Keep the default keyboard.
+    captureInput: false,
     webContentsDebuggingEnabled: false,
   },
   plugins: {

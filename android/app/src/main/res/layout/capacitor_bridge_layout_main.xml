@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Overrides the layout shipped inside the @capacitor/android package so the app module
+  can opt the WebView into the Autofill framework. Without importantForAutofill="yes"
+  the framework skips the view tree and password managers never show suggestions.
+  The view id must stay "webview" because Bridge looks it up with R.id.webview.
+-->
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.getcapacitor.BridgeActivity">
+
+    <com.getcapacitor.CapacitorWebView
+        android:id="@+id/webview"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:importantForAutofill="yes"
+        android:autofillHints="" />
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
