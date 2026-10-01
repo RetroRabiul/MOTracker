@@ -30,7 +30,14 @@ export default function Login() {
   const [showReset, setShowReset] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
   const [resendIn, setResendIn] = useState(0);
-  const { login, loginWithGoogle, resetPassword, sendEmailCode, verifyEmailCode } = useAuth();
+  const {
+    login,
+    loginWithGoogle,
+    resetPassword,
+    sendEmailCode,
+    verifyEmailCode,
+    resendSignupConfirmation,
+  } = useAuth();
   const { colors, darkMode } = useTheme();
   const navigate = useNavigate();
 
@@ -106,6 +113,22 @@ export default function Login() {
       setSuccess(`A new code is on its way to ${email.trim()}.`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to resend the code");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    if (resendIn > 0) return;
+    setError("");
+    setSuccess("");
+    setLoading(true);
+    try {
+      await resendSignupConfirmation(email);
+      setResendIn(RESEND_COOLDOWN_SECONDS);
+      setSuccess(`Confirmation email sent again to ${email.trim()}. Open it to activate your account.`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to resend the confirmation email");
     } finally {
       setLoading(false);
     }
@@ -365,6 +388,19 @@ export default function Login() {
                   Forgot password?
                 </button>
               </div>
+
+              <button
+                type="button"
+                onClick={() => void handleResendConfirmation()}
+                disabled={resendIn > 0 || loading}
+                className={`text-center text-xs underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-60 disabled:no-underline ${
+                  darkMode ? "text-gray-400" : "text-gray-500"
+                }`}
+              >
+                {resendIn > 0
+                  ? `Resend confirmation email in ${resendIn}s`
+                  : "Need to confirm your email? Resend the confirmation email"}
+              </button>
 
               <button
                 type="submit"

@@ -50,7 +50,10 @@ export function getDisplayName(user: User | null): string {
 const CONFIRM_REDIRECT = () => `${window.location.origin}/dashboard`;
 
 const AUTH_CODE_MESSAGES: Record<string, string> = {
-  invalid_credentials: "Invalid email or password",
+  // Supabase reports unconfirmed accounts as invalid_credentials to avoid leaking
+  // which emails exist, so this message has to cover both cases.
+  invalid_credentials:
+    "Invalid email or password. If you just signed up, confirm your email address first.",
   over_request_rate_limit: "Too many attempts. Please try again later",
   over_email_send_rate_limit: "Too many attempts. Please try again later",
   email_not_confirmed: "Please confirm your email address before signing in",

@@ -17,12 +17,24 @@ createRoot(container).render(
 
 // The service worker only makes sense for the installed web app. Inside the native
 // shell the bundle ships with the APK, so precaching would only serve stale builds.
-if (!isNativeApp && "serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
+if ("serviceWorker" in navigator) {
+  if (isNativeApp) {
+    // Earlier builds registered one, so tear it down rather than just skipping setup.
     navigator.serviceWorker
-      .register("/sw.js", { scope: "/" })
+      .getRegistrations()
+      .then((registrations) => Promise.all(registrations.map((r) => r.unregister())))
+      .then(() => caches.keys())
+      .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
       .catch(() => {
-        // Registration failures (private mode, blocked SW) must not break the app.
+        // Cache teardown is best-effort and must never break startup.
       });
-  });
+  } else {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker
+        .register("/sw.js", { scope: "/" })
+        .catch(() => {
+          // Registration failures (private mode, blocked SW) must not break the app.
+        });
+    });
+  }
 }
