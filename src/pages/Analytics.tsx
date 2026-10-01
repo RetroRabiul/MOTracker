@@ -238,7 +238,7 @@ export default function Analytics() {
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate("/")}
+              onClick={() => navigate("/dashboard")}
               aria-label="Back to dashboard"
               className={`rounded-lg p-2 transition ${
                 darkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-600 hover:bg-gray-100"

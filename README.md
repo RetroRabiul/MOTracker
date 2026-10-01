@@ -120,8 +120,10 @@ npx cap open android        # or: cd android && gradlew assembleDebug
 
 ## 7. Features
 
+- Public landing page at `/` with feature grid, pricing plans, FAQ, and light/dark toggle
 - Email/password and Google sign-in, sign-up, sign-out
 - Passwordless email-code sign-in (6-digit code), which also creates the account on first use
+- The tracker itself lives at `/dashboard` and every other app route is protected
 - Add, edit, and delete income/expense entries with type, category, date, amount, currency,
   description, and an optional receipt photo
 - Live totals, income-vs-expense line chart, and per-category donut charts (week / month / all time)
@@ -136,7 +138,7 @@ src/
   components/ProtectedRoute.tsx   auth gate for private routes
   context/                        Auth (Supabase), Theme, Settings providers
   lib/supabase.ts                 client, table/column mapping, row → Transaction
-  pages/                          Login, Signup, Dashboard, AddData, EditTransaction,
+  pages/                          Landing, Login, Signup, Dashboard, AddData, EditTransaction,
                                   ExpenseList, Analytics, Export, Settings
   services/                       transactionService, currencyService, exportService
   types/expense.ts                Transaction type, categories, currency tables, formatting

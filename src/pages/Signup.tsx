@@ -34,7 +34,7 @@ export default function Signup() {
     setLoading(true);
     try {
       await signup(email, password, name);
-      navigate("/");
+      navigate("/dashboard");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to create account";
       if (message === EMAIL_CONFIRMATION_MESSAGE) {

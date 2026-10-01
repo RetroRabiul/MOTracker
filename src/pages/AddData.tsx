@@ -120,7 +120,7 @@ export default function AddData() {
         receiptFile ?? undefined,
       );
       setSuccess(true);
-      setTimeout(() => navigate("/"), 1500);
+      setTimeout(() => navigate("/dashboard"), 1500);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
@@ -178,7 +178,7 @@ export default function AddData() {
       >
         <div className="mx-auto flex max-w-3xl items-center gap-4 px-4 py-4 sm:px-6">
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/dashboard")}
             aria-label="Back to dashboard"
             className={`rounded-lg p-2 transition ${
               darkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-600 hover:bg-gray-100"

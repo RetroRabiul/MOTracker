@@ -55,7 +55,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate("/");
+      navigate("/dashboard");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to sign in");
     } finally {
@@ -87,7 +87,7 @@ export default function Login() {
     setLoading(true);
     try {
       await verifyEmailCode(email, code);
-      navigate("/");
+      navigate("/dashboard");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "That code is not valid");
     } finally {

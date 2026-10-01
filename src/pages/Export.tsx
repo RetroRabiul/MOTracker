@@ -142,7 +142,7 @@ export default function Export() {
       >
         <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-4 sm:px-6">
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/dashboard")}
             aria-label="Back to dashboard"
             className={`rounded-lg p-2 transition ${
               darkMode ? "text-gray-300 hover:bg-slate-800" : "text-gray-600 hover:bg-gray-100"
