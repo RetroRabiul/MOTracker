@@ -54,10 +54,6 @@ async function warnOnUserIdMismatch(userId?: string): Promise<void> {
   }
 }
 
-function toDateOnly(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
 async function fetchRow(id: string): Promise<TransactionRow | null> {
   const { data, error } = await supabase
     .from(TRANSACTIONS_TABLE)
@@ -72,8 +68,18 @@ async function fetchRow(id: string): Promise<TransactionRow | null> {
   return (data as TransactionRow | null) ?? null;
 }
 
+function toDateOnly(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
 async function mapRows(rows: TransactionRow[]): Promise<Transaction[]> {
-  return Promise.all(rows.map(mapRow));
+  const CONCURRENCY = 4;
+  const results: Transaction[] = [];
+  for (let i = 0; i < rows.length; i += CONCURRENCY) {
+    const batch = rows.slice(i, i + CONCURRENCY);
+    results.push(...(await Promise.all(batch.map((r) => mapRow(r)))));
+  }
+  return results;
 }
 
 export async function createTransaction(
@@ -135,18 +141,19 @@ export async function updateTransaction(
   if (updates.category !== undefined) patch.category = updates.category;
   if (updates.description !== undefined) patch.description = updates.description;
 
+  // Storage is cleaned up only after the row has been updated, so a failed
+  // update leaves the previous receipt intact and reachable.
+  let staleReceipt: string | null = null;
+
   if (receiptFile) {
     const user = await requireUser();
-    const newPath = await uploadReceipt(receiptFile, user.id);
-    patch.receipt_path = newPath;
-    if (existing?.receipt_path) {
-      await deleteReceipt(existing.receipt_path);
+    patch.receipt_path = await uploadReceipt(receiptFile, user.id);
+    if (existing?.receipt_path && existing.receipt_path !== patch.receipt_path) {
+      staleReceipt = existing.receipt_path;
     }
   } else if (updates.receiptUrl === null) {
     patch.receipt_path = null;
-    if (existing?.receipt_path) {
-      await deleteReceipt(existing.receipt_path);
-    }
+    staleReceipt = existing?.receipt_path ?? null;
   }
 
   if (Object.keys(patch).length === 0) return;
@@ -157,43 +164,16 @@ export async function updateTransaction(
     .eq("id", transactionId);
 
   if (error) {
+    // A brand new upload is now unreferenced, so drop it to avoid an orphan.
+    if (receiptFile && patch.receipt_path) {
+      await deleteReceipt(patch.receipt_path);
+    }
     throw new Error(`Failed to update transaction: ${error.message}`);
   }
-}
 
-export async function deleteTransaction(transactionId: string): Promise<void> {
-  await assertNotSignedOut();
-  const existing = await fetchRow(transactionId);
-
-  if (existing?.receipt_path) {
-    await deleteReceipt(existing.receipt_path);
+  if (staleReceipt) {
+    await deleteReceipt(staleReceipt);
   }
-
-  const { error } = await supabase
-    .from(TRANSACTIONS_TABLE)
-    .delete()
-    .eq("id", transactionId);
-
-  if (error) {
-    throw new Error(`Failed to delete transaction: ${error.message}`);
-  }
-}
-
-export async function getTransactionsByUser(userId: string): Promise<Transaction[]> {
-  await assertNotSignedOut();
-  await warnOnUserIdMismatch(userId);
-
-  const { data, error } = await supabase
-    .from(TRANSACTIONS_TABLE)
-    .select("*")
-    .order("date", { ascending: false })
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    throw new Error(`Failed to load transactions: ${error.message}`);
-  }
-
-  return mapRows((data ?? []) as TransactionRow[]);
 }
 
 export async function getTransactionsByType(
@@ -230,6 +210,44 @@ export async function getTransactionsByDateRange(
     .select("*")
     .gte("date", toDateOnly(startDate))
     .lte("date", toDateOnly(endDate))
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to load transactions: ${error.message}`);
+  }
+
+  return mapRows((data ?? []) as TransactionRow[]);
+}
+
+export async function deleteTransaction(transactionId: string): Promise<void> {
+  await assertNotSignedOut();
+
+  // Read the receipt path before deleting the row. The row is removed first so
+  // that a storage failure can only orphan an image, never lose one.
+  const existing = await fetchRow(transactionId);
+
+  const { error } = await supabase
+    .from(TRANSACTIONS_TABLE)
+    .delete()
+    .eq("id", transactionId);
+
+  if (error) {
+    throw new Error(`Failed to delete transaction: ${error.message}`);
+  }
+
+  if (existing?.receipt_path) {
+    await deleteReceipt(existing.receipt_path);
+  }
+}
+
+export async function getTransactionsByUser(userId: string): Promise<Transaction[]> {
+  await assertNotSignedOut();
+  await warnOnUserIdMismatch(userId);
+
+  const { data, error } = await supabase
+    .from(TRANSACTIONS_TABLE)
+    .select("*")
     .order("date", { ascending: false })
     .order("created_at", { ascending: false });
 

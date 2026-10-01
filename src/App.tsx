@@ -1,8 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "./context/AuthContext";
-import { ThemeProvider } from "./context/ThemeContext";
+import { AuthProvider, RESET_PASSWORD_PATH } from "./context/AuthContext";
+import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import { SettingsProvider } from "./context/SettingsContext";
 import ProtectedRoute, { PublicRoute } from "./components/ProtectedRoute";
+import BottomNav from "./components/BottomNav";
+import { useStatusBarTheme } from "./hooks/useStatusBarTheme";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -13,13 +15,22 @@ import ExpenseList from "./pages/ExpenseList";
 import Analytics from "./pages/Analytics";
 import Export from "./pages/Export";
 import Settings from "./pages/Settings";
+import ResetPassword from "./pages/ResetPassword";
 import { isNativeApp, NOT_FOUND_ROUTE } from "./lib/platform";
+
+/** Keeps the Android status bar icons legible against the current theme. */
+function NativeThemeSync() {
+  const { darkMode } = useTheme();
+  useStatusBarTheme(darkMode);
+  return null;
+}
 
 export default function App() {
   return (
     <AuthProvider>
       <ThemeProvider>
         <SettingsProvider>
+          <NativeThemeSync />
           <BrowserRouter>
             <Routes>
               <Route
@@ -98,8 +109,17 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
+              {/*
+                Deliberately unguarded: a recovery link establishes a session
+                before this page renders, so ProtectedRoute would be redundant
+                and PublicRoute would bounce the user straight back to the
+                dashboard. The page validates `recoveryActive` itself.
+              */}
+              <Route path={RESET_PASSWORD_PATH} element={<ResetPassword />} />
               <Route path="*" element={<Navigate to={NOT_FOUND_ROUTE} replace />} />
             </Routes>
+            {/* Mobile-only; renders nothing on auth/marketing routes. */}
+            <BottomNav />
           </BrowserRouter>
         </SettingsProvider>
       </ThemeProvider>

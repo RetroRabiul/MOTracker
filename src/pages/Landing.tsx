@@ -171,7 +171,7 @@ export default function Landing() {
     >
       {/* ---------------------------------------------------------------- Header */}
       <header
-        className={`sticky top-0 z-20 border-b backdrop-blur ${
+        className={`pt-safe sticky top-0 z-20 border-b backdrop-blur ${
           darkMode ? "border-slate-800 bg-slate-950/80" : "border-gray-200 bg-white/80"
         }`}
       >
@@ -371,7 +371,7 @@ export default function Landing() {
                   This month
                 </p>
                 <span
-                  className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                  className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
                     darkMode ? "bg-slate-700 text-slate-300" : "bg-white text-gray-500"
                   }`}
                 >
@@ -627,7 +627,7 @@ export default function Landing() {
 
       {/* ---------------------------------------------------------------- Footer */}
       <footer
-        className={`border-t py-10 ${
+        className={`border-t pt-10 pb-[calc(2.5rem+var(--sab))] ${
           darkMode ? "border-slate-800" : "border-gray-200"
         }`}
       >

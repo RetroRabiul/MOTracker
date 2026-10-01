@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { useSettings } from "../context/SettingsContext";
 import { createTransaction } from "../services/transactionService";
 import { CURRENCIES, EXPENSE_CATEGORIES, INCOME_CATEGORIES, getCurrencySymbol } from "../types/expense";
 
@@ -47,12 +48,14 @@ export default function AddData() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { colors, darkMode } = useTheme();
+  const { defaultCurrency } = useSettings();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [type, setType] = useState<"expense" | "income">("expense");
   const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState("USD");
+  // Defaults to the user's reporting currency instead of always USD.
+  const [currency, setCurrency] = useState(defaultCurrency);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [category, setCategory] = useState("Other");
   const [description, setDescription] = useState("");
@@ -170,36 +173,36 @@ export default function AddData() {
       }}
     >
       <header
-        className="sticky top-0 z-10 border-b transition-colors duration-200"
+        className="pt-safe sticky top-0 z-10 border-b backdrop-blur transition-colors duration-200"
         style={{
-          backgroundColor: darkMode ? "#1e293b" : colors.primary + "12",
+          backgroundColor: darkMode ? "#1e293bE6" : colors.primary + "18",
           borderColor: darkMode ? "#334155" : undefined,
         }}
       >
-        <div className="mx-auto flex max-w-3xl items-center gap-4 px-4 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-3 sm:px-6 sm:py-4">
           <button
             onClick={() => navigate("/dashboard")}
             aria-label="Back to dashboard"
-            className={`rounded-lg p-2 transition ${
+            className={`flex h-11 w-11 items-center justify-center rounded-lg transition ${
               darkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-600 hover:bg-gray-100"
             }`}
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className={`text-xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>
+          <h1 className={`text-lg font-bold sm:text-xl ${darkMode ? "text-white" : "text-gray-900"}`}>
             Add Data
           </h1>
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
+      <main className="pb-tabbar mx-auto max-w-3xl px-4 py-5 sm:px-6 sm:py-6">
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
           <div className={`${cardClass} p-4`} style={cardStyle}>
             <label className={labelClass}>Type</label>
             <div className={`flex rounded-lg p-1 ${darkMode ? "bg-gray-800" : "bg-gray-100"}`}>
@@ -246,6 +249,7 @@ export default function AddData() {
                   </span>
                   <input
                     type="number"
+                    inputMode="decimal"
                     step="0.01"
                     min="0.01"
                     value={amount}
@@ -256,14 +260,11 @@ export default function AddData() {
                   />
                 </div>
                 <div className="relative shrink-0">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-400">
-                    {getCurrencySymbol(currency)}
-                  </span>
                   <select
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value)}
                     aria-label="Currency"
-                    className={`w-28 appearance-none rounded-lg border py-2.5 pl-9 pr-8 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-primary-500/20 ${
+                    className={`w-28 appearance-none rounded-lg border py-2.5 pl-3 pr-8 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-primary-500/20 ${
                       darkMode
                         ? "border-gray-600 bg-gray-800 text-white focus:border-primary-500"
                         : "border-gray-300 bg-gray-50 text-gray-900 focus:border-primary-500 focus:bg-white"
@@ -376,7 +377,9 @@ export default function AddData() {
                 <img
                   src={receiptPreview}
                   alt="Receipt preview"
-                  className={`w-full rounded-lg border ${darkMode ? "border-gray-700" : "border-gray-200"}`}
+                  className={`max-h-64 w-full rounded-lg border object-contain ${
+                    darkMode ? "border-gray-700" : "border-gray-200"
+                  }`}
                 />
                 <button
                   type="button"

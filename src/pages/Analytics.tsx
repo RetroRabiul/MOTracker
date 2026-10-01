@@ -6,6 +6,7 @@ import {
   Home,
   Laptop,
   Loader2,
+  RefreshCw,
   Package,
   Plane,
   TrendingUp,
@@ -41,9 +42,11 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useSettings } from "../context/SettingsContext";
 import { getTransactionsByUser } from "../services/transactionService";
-import { convertTransactions } from "../services/currencyService";
+import { useConvertedTransactions } from "../hooks/useConvertedTransactions";
+import CurrencyWarning from "../components/CurrencyWarning";
 import type { Transaction } from "../types/expense";
 import { CATEGORY_COLORS, EXPENSE_CATEGORIES, INCOME_CATEGORIES, formatCurrency } from "../types/expense";
+import { compactAxisValue } from "../lib/formatChartAxis";
 
 type TimeRange = "week" | "month" | "all";
 
@@ -93,17 +96,19 @@ export default function Analytics() {
   const { colors, darkMode } = useTheme();
   const { defaultCurrency } = useSettings();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [convertedTransactions, setConvertedTransactions] = useState<Transaction[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<TimeRange>("month");
 
   const loadTransactions = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    setLoadError(null);
     try {
       setTransactions(await getTransactionsByUser(user.id));
     } catch (error) {
       console.error("Error loading transactions:", error);
+      setLoadError(error instanceof Error ? error.message : "Could not load your transactions.");
     } finally {
       setLoading(false);
     }
@@ -113,19 +118,7 @@ export default function Analytics() {
     void loadTransactions();
   }, [loadTransactions]);
 
-  useEffect(() => {
-    if (transactions.length === 0) {
-      setConvertedTransactions([]);
-      return;
-    }
-    let cancelled = false;
-    convertTransactions(transactions, defaultCurrency).then((converted) => {
-      if (!cancelled) setConvertedTransactions(converted);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transactions, defaultCurrency]);
+  const conversion = useConvertedTransactions(transactions, defaultCurrency);
 
   const { expenseCategoryData, incomeCategoryData, lineData } = useMemo(() => {
     const now = new Date();
@@ -146,8 +139,8 @@ export default function Analytics() {
     const startStr = format(startDate, "yyyy-MM-dd");
     const endStr = format(endDate, "yyyy-MM-dd");
 
-    const source = convertedTransactions.length > 0 ? convertedTransactions : transactions;
-    const filtered = source.filter((t) => t.date >= startStr && t.date <= endStr);
+    // Only converted rows may be charted, otherwise figures change once rates land.
+    const filtered = conversion.converted.filter((t) => t.date >= startStr && t.date <= endStr);
 
     const expenseSlices: CategorySlice[] = EXPENSE_CATEGORIES.map((category) => ({
       name: category,
@@ -205,7 +198,7 @@ export default function Analytics() {
       incomeCategoryData: incomeSlices,
       lineData: daily,
     };
-  }, [transactions, convertedTransactions, timeRange]);
+  }, [conversion.converted, timeRange]);
 
   const tooltipStyle = {
     backgroundColor: darkMode ? "#1e293b" : "white",
@@ -229,59 +222,105 @@ export default function Analytics() {
       }}
     >
       <header
-        className="sticky top-0 z-10 border-b transition-colors duration-200"
+        className="pt-safe sticky top-0 z-10 border-b backdrop-blur transition-colors duration-200"
         style={{
-          backgroundColor: darkMode ? "#1e293b" : colors.primary + "12",
+          backgroundColor: darkMode ? "#1e293bE6" : colors.primary + "18",
           borderColor: darkMode ? "#334155" : undefined,
         }}
       >
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
-          <div className="flex items-center gap-4">
+        <div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 sm:py-4">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => navigate("/dashboard")}
               aria-label="Back to dashboard"
-              className={`rounded-lg p-2 transition ${
+              className={`flex h-11 w-11 items-center justify-center rounded-lg transition ${
                 darkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-600 hover:bg-gray-100"
               }`}
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
-            <h1 className={`text-xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>
+            <h1 className={`text-lg font-bold sm:text-xl ${darkMode ? "text-white" : "text-gray-900"}`}>
               Financial Analytics
             </h1>
           </div>
+          {/*
+            Scrollable rather than wrapping: four range buttons on a 360px
+            screen would otherwise push the title off the row.
+          */}
           <div
-            className={`flex rounded-lg border p-0.5 ${
-              darkMode ? "border-gray-700 bg-gray-800" : "border-gray-300 bg-white"
+            role="group"
+            aria-label="Time range"
+            className={`-mx-4 flex overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:rounded-lg sm:border sm:p-0.5 sm:px-0 ${
+              darkMode ? "sm:border-gray-700 sm:bg-gray-800" : "sm:border-gray-300 sm:bg-white"
             }`}
           >
-            {RANGES.map((r) => (
-              <button
-                key={r.key}
-                onClick={() => setTimeRange(r.key)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                  timeRange === r.key
-                    ? "text-white"
-                    : darkMode
-                      ? "text-gray-400 hover:text-white"
-                      : "text-gray-600 hover:text-gray-900"
-                }`}
-                style={timeRange === r.key ? { backgroundColor: colors.primary } : {}}
-              >
-                {r.label}
-              </button>
-            ))}
+            <div className="flex shrink-0 gap-1">
+              {RANGES.map((r) => (
+                <button
+                  key={r.key}
+                  onClick={() => setTimeRange(r.key)}
+                  aria-pressed={timeRange === r.key}
+                  className={`min-h-[2.75rem] shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition sm:min-h-0 sm:border-0 sm:px-3 ${
+                    timeRange === r.key
+                      ? "border-transparent text-white"
+                      : darkMode
+                        ? "border-gray-700 bg-gray-800 text-gray-400 sm:bg-transparent"
+                        : "border-gray-300 bg-white text-gray-600 sm:bg-transparent"
+                  }`}
+                  style={timeRange === r.key ? { backgroundColor: colors.primary } : {}}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
-        {loading ? (
+      <main className="pb-tabbar mx-auto max-w-5xl px-4 py-5 sm:px-6 sm:py-6">
+        {loadError ? (
+          <div
+            role="alert"
+            className={`rounded-2xl border p-6 text-center ${
+              darkMode ? "border-red-800 bg-red-950/30" : "border-red-200 bg-red-50"
+            }`}
+          >
+            <p className={`text-sm font-semibold ${darkMode ? "text-red-200" : "text-red-900"}`}>
+              We could not load your transactions
+            </p>
+            <p className={`mt-1 text-sm ${darkMode ? "text-red-300/80" : "text-red-700"}`}>
+              {loadError}
+            </p>
+            <button
+              type="button"
+              onClick={() => void loadTransactions()}
+              className={`mt-4 inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition ${
+                darkMode
+                  ? "border-red-700 text-red-200 hover:bg-red-900/40"
+                  : "border-red-300 text-red-800 hover:bg-red-100"
+              }`}
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              Try again
+            </button>
+          </div>
+        ) : loading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin" style={{ color: colors.primary }} />
           </div>
         ) : (
           <>
+            <CurrencyWarning
+              unconvertedCurrencies={conversion.unconvertedCurrencies}
+              targetCurrency={defaultCurrency}
+              count={conversion.unconverted.length}
+              stale={conversion.stale}
+              pending={conversion.pending}
+              provider={conversion.provider}
+              asOf={conversion.asOf}
+              onRetry={conversion.retry}
+              darkMode={darkMode}
+            />
             <div
               className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-2 text-xs ${
                 darkMode ? "bg-gray-800 text-gray-400" : "bg-gray-100 text-gray-500"
@@ -289,7 +328,7 @@ export default function Analytics() {
             >
               <span>All amounts shown in</span>
               <span
-                className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
                   darkMode ? "bg-gray-700 text-gray-300" : "bg-white text-gray-600 shadow-sm"
                 }`}
               >
@@ -318,9 +357,9 @@ export default function Analytics() {
                   <p className="text-sm text-gray-500">No transaction data available for charts</p>
                 </div>
               ) : (
-                <div className="h-48">
+                <div className="h-60 sm:h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={lineData}>
+                  <LineChart data={lineData}>
                       <CartesianGrid
                         strokeDasharray="3 3"
                         stroke={darkMode ? "#334155" : "#f0f0f0"}
@@ -333,12 +372,14 @@ export default function Analytics() {
                         tickLine={false}
                         axisLine={false}
                       />
-                      <YAxis
-                        stroke={darkMode ? "#64748b" : "#9ca3af"}
-                        fontSize={11}
-                        tickLine={false}
-                        axisLine={false}
-                      />
+                        <YAxis
+                          stroke={darkMode ? "#64748b" : "#9ca3af"}
+                          fontSize={11}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={compactAxisValue}
+                          width={44}
+                        />
                       <Tooltip
                         contentStyle={tooltipStyle}
                         formatter={(value: unknown) => formatCurrency(Number(value), defaultCurrency)}

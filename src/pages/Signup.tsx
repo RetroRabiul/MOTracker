@@ -126,7 +126,7 @@ export default function Signup() {
 
   return (
     <div
-      className="flex min-h-screen flex-col items-center justify-center px-4 py-8"
+      className="pt-safe flex min-h-screen flex-col items-center justify-center px-4 py-8 pb-[calc(2rem+var(--sab))]"
       style={{
         background: darkMode
           ? "linear-gradient(135deg, #020617 0%, #111827 40%, #1f2937 100%)"

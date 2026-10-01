@@ -10,15 +10,45 @@
   --color-primary-600: #2563eb;
   --color-primary-700: #1d4ed8;
   --color-primary-800: #1e40af;
-  --color-primary-900: #1e3a8a;
+  --color-primary-900: #1e3a8f;
 }
 
 :root {
   color-scheme: light;
+  /*
+   * Safe-area insets.
+   *
+   * These names are load-bearing. The app targets SDK 36, so Android 15+ lays
+   * the WebView out edge to edge, and Capacitor's built-in SystemBars plugin
+   * reads the real insets and writes them onto `document.documentElement` as
+   * inline `--safe-area-inset-*` values. A WebView does not populate
+   * `env(safe-area-inset-*)` on its own, so these env() calls are only the
+   * browser fallback (iOS PWA, desktop) and the plugin's inline values win
+   * because inline styles outrank this rule.
+   *
+   * The short aliases below keep the call sites readable.
+   */
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  --sat: var(--safe-area-inset-top);
+  --sab: var(--safe-area-inset-bottom);
+  --sal: var(--safe-area-inset-left);
+  --sar: var(--safe-area-inset-right);
 }
 
 html.dark {
   color-scheme: dark;
+}
+
+html {
+  /* Avoid the iOS rubber-band exposing the page background past the body. */
+  background-color: #f8fafc;
+}
+
+html.dark {
+  background-color: #020617;
 }
 
 body {
@@ -28,6 +58,24 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: #f8fafc;
   color: #111827;
+  /*
+   * Text scaling must be honoured. `user-scalable=no` used to live in the
+   * viewport meta; it is gone, so pinch-zoom and OS font scaling work again.
+   */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /*
+   * Guards against one wide child (a long unbroken email, a chart) forcing
+   * the whole document sideways. `clip` rather than `hidden`: `hidden` would
+   * make the body a scroll container and break the sticky page headers.
+   */
+  overflow-x: clip;
+  /* Kill the grey flash Android paints over tappable rows. */
+  -webkit-tap-highlight-color: transparent;
+  /* Stop double-tap zoom on controls while leaving pinch-zoom available. */
+  touch-action: manipulation;
+  /* Keep momentum scrolling inside the app rather than the browser chrome. */
+  overscroll-behavior-y: none;
 }
 
 html.dark body {
@@ -35,6 +83,97 @@ html.dark body {
   color: #f8fafc;
 }
 
+#root {
+  /*
+   * `100dvh` rather than `100vh`: 100vh is the *largest* viewport, so it leaves
+   * dead space while the mobile URL bar is expanded. dvh tracks the visible area.
+   */
+  min-height: 100vh;
+  min-height: 100dvh;
+  /* Left/right insets clear landscape notches and curved edges. */
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+}
+
+@media (min-width: 640px) {
+  #root {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+/*
+ * iOS zooms any input whose computed font-size is under 16px on focus, which
+ * leaves the page scrolled sideways with the keyboard over the field. Every
+ * form control is pinned to 16px on phones; the intended 14px returns at sm.
+ */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+@media (min-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 0.875rem;
+  }
+}
+
 input[type="date"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
+}
+
+/*
+ * Number fields: the native spinners steal width and are easy to hit by accident
+ * on touch, so they are dropped. `inputMode` drives the numeric keypad instead.
+ */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Visible focus ring for keyboard users; suppressed for touch by :focus-visible. */
+:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * Safe-area helpers.
+ *
+ * `pt-safe` keeps a sticky header clear of the status bar/notch. `pb-tabbar`
+ * reserves room for the fixed mobile tab bar plus the home-indicator inset, and
+ * collapses back to a normal bottom pad once the tab bar is hidden at md.
+ */
+.pt-safe {
+  padding-top: var(--sat);
+}
+
+.pb-tabbar {
+  padding-bottom: calc(3.5rem + var(--sab) + 1.5rem);
+}
+
+@media (min-width: 768px) {
+  .pb-tabbar {
+    padding-bottom: 2rem;
+  }
 }

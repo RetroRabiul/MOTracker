@@ -159,7 +159,7 @@ export default function Login() {
     setLoading(true);
     try {
       await resetPassword(email);
-      setSuccess("Password reset email sent! Check your inbox.");
+      setSuccess("Password reset email sent! The link in it opens a page where you can set a new password.");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to send reset email");
     } finally {
@@ -170,7 +170,7 @@ export default function Login() {
   if (showReset) {
     return (
       <div
-        className="flex min-h-screen flex-col items-center justify-center px-4 py-8"
+        className="pt-safe flex min-h-screen flex-col items-center justify-center px-4 py-8 pb-[calc(2rem+var(--sab))]"
         style={{
           background: darkMode
             ? "linear-gradient(135deg, #020617 0%, #111827 40%, #1f2937 100%)"
@@ -257,7 +257,7 @@ export default function Login() {
 
   return (
     <div
-      className="flex min-h-screen flex-col items-center justify-center px-4 py-8"
+      className="pt-safe flex min-h-screen flex-col items-center justify-center px-4 py-8 pb-[calc(2rem+var(--sab))]"
       style={{
         background: darkMode
           ? "linear-gradient(135deg, #020617 0%, #111827 40%, #1f2937 100%)"

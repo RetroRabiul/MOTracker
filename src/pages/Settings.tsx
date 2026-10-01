@@ -6,6 +6,7 @@ import { exportToCSV, exportToExcel, exportToPDF } from "../services/exportServi
 import { useTheme, type ColorPalette } from "../context/ThemeContext";
 import { useSettings } from "../context/SettingsContext";
 import { CURRENCIES } from "../types/expense";
+import Toast, { type ToastTone } from "../components/Toast";
 import {
   ArrowLeft,
   Palette,
@@ -36,6 +37,7 @@ export default function Settings() {
   const { palette, setPalette, colors, darkMode, toggleDarkMode } = useTheme();
   const { defaultCurrency, setDefaultCurrency } = useSettings();
   const [exporting, setExporting] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ tone: ToastTone; message: string } | null>(null);
 
   const handleExport = async (format: "csv" | "excel" | "pdf") => {
     if (!user) return;
@@ -43,7 +45,7 @@ export default function Settings() {
     try {
       const data = await getTransactionsByUser(user.id);
       if (data.length === 0) {
-        alert("No transactions to export");
+        setToast({ tone: "info", message: "There are no transactions to export yet." });
         return;
       }
       const timestamp = new Date().toISOString().split("T")[0];
@@ -62,7 +64,7 @@ export default function Settings() {
       }
     } catch (error) {
       console.error("Export error:", error);
-      alert("Failed to export");
+      setToast({ tone: "error", message: "Export failed. Please try again." });
     } finally {
       setExporting(null);
     }
@@ -74,26 +76,30 @@ export default function Settings() {
       style={{ backgroundColor: darkMode ? "#020617" : colors.primary + "08" }}
     >
       <header
-        className={`border-b ${darkMode ? "border-slate-800" : "border-gray-200"}`}
-        style={{ backgroundColor: darkMode ? "#0f172a" : colors.primary + "12" }}
+        className={`pt-safe sticky top-0 z-10 border-b backdrop-blur transition-colors duration-200 ${
+          darkMode ? "border-slate-800" : "border-gray-200"
+        }`}
+        style={{ backgroundColor: darkMode ? "#0f172aE6" : colors.primary + "18" }}
       >
-        <div className="mx-auto flex max-w-3xl items-center gap-4 px-4 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-3 sm:px-6 sm:py-4">
           <button
             onClick={() => navigate("/dashboard")}
             aria-label="Back to dashboard"
-            className={`rounded-lg p-2 transition ${
+            className={`flex h-11 w-11 items-center justify-center rounded-lg transition ${
               darkMode ? "text-gray-300 hover:bg-slate-800" : "text-gray-600 hover:bg-gray-100"
             }`}
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className={`text-xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>Settings</h1>
+          <h1 className={`text-lg font-bold sm:text-xl ${darkMode ? "text-white" : "text-gray-900"}`}>
+            Settings
+          </h1>
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6">
+      <main className="pb-tabbar mx-auto max-w-3xl space-y-5 px-4 py-5 sm:space-y-6 sm:px-6 sm:py-6">
         <div
-          className={`rounded-xl border p-6 shadow-sm transition-colors duration-200 ${
+          className={`rounded-xl border p-4 shadow-sm transition-colors duration-200 sm:p-6 ${
             darkMode ? "border-slate-700" : "border-transparent"
           }`}
           style={{ backgroundColor: darkMode ? "#1e293b" : colors.primary + "15" }}
@@ -122,7 +128,7 @@ export default function Settings() {
         </div>
 
         <div
-          className={`rounded-xl border p-6 shadow-sm transition-colors duration-200 ${
+          className={`rounded-xl border p-4 shadow-sm transition-colors duration-200 sm:p-6 ${
             darkMode ? "border-slate-700" : "border-transparent"
           }`}
           style={{ backgroundColor: darkMode ? "#1e293b" : colors.primary + "15" }}
@@ -162,7 +168,7 @@ export default function Settings() {
         </div>
 
         <div
-          className={`rounded-xl border p-6 shadow-sm transition-colors duration-200 ${
+          className={`rounded-xl border p-4 shadow-sm transition-colors duration-200 sm:p-6 ${
             darkMode ? "border-slate-700" : "border-transparent"
           }`}
           style={{ backgroundColor: darkMode ? "#1e293b" : colors.primary + "15" }}
@@ -214,7 +220,7 @@ export default function Settings() {
         </div>
 
         <div
-          className={`rounded-xl border p-6 shadow-sm transition-colors duration-200 ${
+          className={`rounded-xl border p-4 shadow-sm transition-colors duration-200 sm:p-6 ${
             darkMode ? "border-slate-700" : "border-transparent"
           }`}
           style={{ backgroundColor: darkMode ? "#1e293b" : colors.primary + "15" }}
@@ -319,7 +325,7 @@ export default function Settings() {
         </div>
 
         <div
-          className={`rounded-xl border p-6 shadow-sm transition-colors duration-200 ${
+          className={`rounded-xl border p-4 shadow-sm transition-colors duration-200 sm:p-6 ${
             darkMode ? "border-slate-700" : "border-transparent"
           }`}
           style={{ backgroundColor: darkMode ? "#1e293b" : colors.primary + "15" }}
@@ -367,17 +373,34 @@ export default function Settings() {
           <p className={`mb-2 text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
             Install the Android APK directly on your phone.
           </p>
-          <div
-            className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium opacity-50 cursor-not-allowed ${
-              darkMode ? "border-slate-700 bg-slate-800 text-gray-400" : "border-gray-300 bg-gray-100 text-gray-500"
-            }`}
-            aria-disabled="true"
-          >
-            <Download className="h-4 w-4" />
-            Download APK (coming soon)
-          </div>
+          {__APK_PUBLISHED__ ? (
+            <a
+              href="/app.apk"
+              download="ExpenseTracker.apk"
+              className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition ${
+                darkMode
+                  ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              <Download className="h-4 w-4" />
+              Download APK
+            </a>
+          ) : (
+            <div
+              className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium opacity-50 cursor-not-allowed ${
+                darkMode ? "border-slate-700 bg-slate-800 text-gray-400" : "border-gray-300 bg-gray-100 text-gray-500"
+              }`}
+              aria-disabled="true"
+            >
+              <Download className="h-4 w-4" />
+              Download APK (coming soon)
+            </div>
+          )}
           <p className={`mt-2 text-xs ${darkMode ? "text-gray-500" : "text-gray-400"}`}>
-            The APK will appear here once a build is published.
+            {__APK_PUBLISHED__
+              ? "You will need to allow installs from your browser to install the app."
+              : "The APK will appear here once a build is published."}
           </p>
         </div>
 
@@ -385,6 +408,15 @@ export default function Settings() {
           ExpenseTracker v1.0
         </p>
       </main>
+
+      {toast && (
+        <Toast
+          tone={toast.tone}
+          message={toast.message}
+          darkMode={darkMode}
+          onDismiss={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

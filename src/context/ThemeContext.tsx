@@ -34,7 +34,8 @@ export function useTheme() {
 
 function readPalette(): ColorPalette {
   const saved = localStorage.getItem("expense_palette");
-  return saved && saved in PALETTES ? (saved as ColorPalette) : "amethyst";
+  // `Object.hasOwn` rather than `in`, which also matches prototype keys.
+  return saved && Object.hasOwn(PALETTES, saved) ? (saved as ColorPalette) : "amethyst";
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

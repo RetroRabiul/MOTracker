@@ -8,6 +8,7 @@ import {
   Moon,
   Plus,
   Receipt,
+  RefreshCw,
   Settings,
   Sun,
   TrendingDown,
@@ -38,9 +39,11 @@ import { getDisplayName, useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useSettings } from "../context/SettingsContext";
 import { getTransactionsByUser } from "../services/transactionService";
-import { convertTransactions } from "../services/currencyService";
+import { useConvertedTransactions } from "../hooks/useConvertedTransactions";
+import CurrencyWarning from "../components/CurrencyWarning";
 import type { Transaction } from "../types/expense";
 import { formatCurrency, getCurrencySymbol } from "../types/expense";
+import { compactAxisValue } from "../lib/formatChartAxis";
 
 type TimeRange = "week" | "month" | "all";
 
@@ -65,17 +68,19 @@ export default function Dashboard() {
   const { defaultCurrency } = useSettings();
   const navigate = useNavigate();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [convertedTransactions, setConvertedTransactions] = useState<Transaction[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<TimeRange>("month");
 
   const loadTransactions = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    setLoadError(null);
     try {
       setTransactions(await getTransactionsByUser(user.id));
     } catch (error) {
       console.error("Error loading transactions:", error);
+      setLoadError(error instanceof Error ? error.message : "Could not load your transactions.");
     } finally {
       setLoading(false);
     }
@@ -85,19 +90,7 @@ export default function Dashboard() {
     void loadTransactions();
   }, [loadTransactions]);
 
-  useEffect(() => {
-    if (transactions.length === 0) {
-      setConvertedTransactions([]);
-      return;
-    }
-    let cancelled = false;
-    convertTransactions(transactions, defaultCurrency).then((converted) => {
-      if (!cancelled) setConvertedTransactions(converted);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transactions, defaultCurrency]);
+  const conversion = useConvertedTransactions(transactions, defaultCurrency);
 
   const {
     totalIncome,
@@ -126,8 +119,10 @@ export default function Dashboard() {
     const startStr = format(startDate, "yyyy-MM-dd");
     const endStr = format(endDate, "yyyy-MM-dd");
 
-    const source = convertedTransactions.length > 0 ? convertedTransactions : transactions;
-    const filtered = source.filter((t) => t.date >= startStr && t.date <= endStr);
+    // Only converted rows may be summed, otherwise figures change once rates land.
+    const filtered = conversion.converted.filter(
+      (t) => t.date >= startStr && t.date <= endStr,
+    );
 
     const incomeEntries = filtered.filter((t) => t.type === "income");
     const expenseEntries = filtered.filter((t) => t.type === "expense");
@@ -180,10 +175,10 @@ export default function Dashboard() {
       activeCategories: cats,
       chartData: chart,
     };
-  }, [transactions, convertedTransactions, timeRange]);
+  }, [conversion.converted, timeRange]);
 
   const cardStyle = { backgroundColor: darkMode ? "#1e293b" : colors.primary + "15" };
-  const badgeClass = `ml-auto rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+  const badgeClass = `ml-auto rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
     darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-200 text-gray-600"
   }`;
 
@@ -205,13 +200,13 @@ export default function Dashboard() {
       }}
     >
       <header
-        className="sticky top-0 z-10 border-b transition-colors duration-200"
+        className="pt-safe sticky top-0 z-10 border-b backdrop-blur transition-colors duration-200"
         style={{
-          backgroundColor: darkMode ? "#1e293b" : colors.primary + "12",
+          backgroundColor: darkMode ? "#1e293bE6" : colors.primary + "18",
           borderColor: darkMode ? "#334155" : undefined,
         }}
       >
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
           <div className="flex items-center gap-3">
             <div
               className="flex h-10 w-10 items-center justify-center rounded-xl"
@@ -251,9 +246,9 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <h2 className={`text-2xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>
+      <main className="pb-tabbar mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <div className="mb-6 sm:mb-8">
+          <h2 className={`text-xl font-bold sm:text-2xl ${darkMode ? "text-white" : "text-gray-900"}`}>
             Welcome back, {getDisplayName(user)}!
           </h2>
           <p className={`mt-1 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
@@ -261,14 +256,52 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {loading ? (
+        {loadError ? (
+          <div
+            role="alert"
+            className={`rounded-2xl border p-6 text-center ${
+              darkMode ? "border-red-800 bg-red-950/30" : "border-red-200 bg-red-50"
+            }`}
+          >
+            <p className={`text-sm font-semibold ${darkMode ? "text-red-200" : "text-red-900"}`}>
+              We could not load your transactions
+            </p>
+            <p className={`mt-1 text-sm ${darkMode ? "text-red-300/80" : "text-red-700"}`}>
+              {loadError}
+            </p>
+            <button
+              type="button"
+              onClick={() => void loadTransactions()}
+              className={`mt-4 inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition ${
+                darkMode
+                  ? "border-red-700 text-red-200 hover:bg-red-900/40"
+                  : "border-red-300 text-red-800 hover:bg-red-100"
+              }`}
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              Try again
+            </button>
+          </div>
+        ) : loading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin" style={{ color: colors.primary }} />
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <>
+            <CurrencyWarning
+              unconvertedCurrencies={conversion.unconvertedCurrencies}
+              targetCurrency={defaultCurrency}
+              count={conversion.unconverted.length}
+              stale={conversion.stale}
+              pending={conversion.pending}
+              provider={conversion.provider}
+              asOf={conversion.asOf}
+              onRetry={conversion.retry}
+              darkMode={darkMode}
+            />
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="space-y-6 lg:col-span-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className={`text-lg font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>
                   Overview
                 </h3>
@@ -281,7 +314,7 @@ export default function Dashboard() {
                     <button
                       key={r.key}
                       onClick={() => setTimeRange(r.key)}
-                      className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
+                      className={`min-h-[2.75rem] rounded-md px-3.5 py-1.5 text-sm font-medium transition sm:min-h-0 sm:px-4 ${
                         timeRange === r.key
                           ? "text-white"
                           : darkMode
@@ -331,6 +364,8 @@ export default function Dashboard() {
                           fontSize={11}
                           tickLine={false}
                           axisLine={false}
+                          tickFormatter={compactAxisValue}
+                          width={44}
                         />
                         <Tooltip
                           contentStyle={{
@@ -435,7 +470,11 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="space-y-4">
+            {/*
+              Quick-access cards duplicate the mobile tab bar, so they only
+              render from md up where the tab bar is hidden.
+            */}
+            <div className="hidden space-y-4 md:block">
               <button
                 onClick={() => navigate("/add-data")}
                 className="flex w-full items-center gap-4 rounded-xl p-5 text-left text-white shadow-sm transition hover:opacity-90"
@@ -537,6 +576,7 @@ export default function Dashboard() {
               </button>
             </div>
           </div>
+          </>
         )}
       </main>
     </div>

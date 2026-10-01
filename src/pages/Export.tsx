@@ -4,7 +4,9 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useSettings } from "../context/SettingsContext";
 import { getTransactionsByUser } from "../services/transactionService";
-import { convertTransactions } from "../services/currencyService";
+import { useConvertedTransactions } from "../hooks/useConvertedTransactions";
+import CurrencyWarning from "../components/CurrencyWarning";
+import Toast, { type ToastTone } from "../components/Toast";
 import { exportToCSV, exportToExcel, exportToPDF } from "../services/exportService";
 import type { Transaction, TransactionType } from "../types/expense";
 import { getCurrencySymbol } from "../types/expense";
@@ -17,6 +19,7 @@ import {
   Loader2,
   Calendar,
   Filter,
+  RefreshCw,
 } from "lucide-react";
 
 export default function Export() {
@@ -25,19 +28,22 @@ export default function Export() {
   const { colors, darkMode } = useTheme();
   const { defaultCurrency } = useSettings();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [convertedTransactions, setConvertedTransactions] = useState<Transaction[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<"all" | "week" | "month">("all");
   const [typeFilter, setTypeFilter] = useState<TransactionType | "All">("All");
+  const [toast, setToast] = useState<{ tone: ToastTone; message: string } | null>(null);
 
   const loadTransactions = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    setLoadError(null);
     try {
       setTransactions(await getTransactionsByUser(user.id));
     } catch (error) {
       console.error("Error loading transactions:", error);
+      setLoadError(error instanceof Error ? error.message : "Could not load your transactions.");
     } finally {
       setLoading(false);
     }
@@ -47,21 +53,9 @@ export default function Export() {
     void loadTransactions();
   }, [loadTransactions]);
 
-  useEffect(() => {
-    if (transactions.length === 0) {
-      setConvertedTransactions([]);
-      return;
-    }
-    let cancelled = false;
-    convertTransactions(transactions, defaultCurrency).then((converted) => {
-      if (!cancelled) setConvertedTransactions(converted);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transactions, defaultCurrency]);
+  const conversion = useConvertedTransactions(transactions, defaultCurrency);
 
-  const getFilteredTransactions = () => {
+  const getFilteredTransactions = useCallback(() => {
     let filtered = transactions;
 
     if (typeFilter !== "All") {
@@ -80,14 +74,14 @@ export default function Export() {
     }
 
     return filtered;
-  };
+  }, [transactions, typeFilter, dateRange]);
 
   const handleExport = async (format: "csv" | "excel" | "pdf") => {
     setExporting(format);
     try {
       const filtered = getFilteredTransactions();
       if (filtered.length === 0) {
-        alert("No transactions to export");
+        setToast({ tone: "info", message: "No transactions match the selected filters." });
         return;
       }
 
@@ -107,29 +101,32 @@ export default function Export() {
       }
     } catch (error) {
       console.error("Export error:", error);
-      alert("Failed to export. Please try again.");
+      setToast({ tone: "error", message: "Export failed. Please try again." });
     } finally {
       setExporting(null);
     }
   };
 
   const filteredTransactions = getFilteredTransactions();
-  const convertedAmounts = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const t of convertedTransactions) {
-      map.set(t.id, t.amount);
+
+  // Preview totals only sum rows that were actually converted, matching what
+  // the PDF will report. CSV and Excel carry each row's own currency instead.
+  const convertedById = useMemo(() => {
+    const map = new Map<string, Transaction>();
+    for (const t of conversion.converted) {
+      map.set(t.id, t);
     }
     return map;
-  }, [convertedTransactions]);
-
-  const getAmount = (t: Transaction) => convertedAmounts.get(t.id) ?? t.amount;
+  }, [conversion.converted]);
 
   const totalIncome = filteredTransactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + getAmount(t), 0);
+    .map((t) => convertedById.get(t.id))
+    .filter((t): t is Transaction => t?.type === "income")
+    .reduce((sum, t) => sum + t.amount, 0);
   const totalExpenses = filteredTransactions
-    .filter((t) => t.type === "expense")
-    .reduce((sum, t) => sum + getAmount(t), 0);
+    .map((t) => convertedById.get(t.id))
+    .filter((t): t is Transaction => t?.type === "expense")
+    .reduce((sum, t) => sum + t.amount, 0);
 
   return (
     <div
@@ -137,109 +134,120 @@ export default function Export() {
       style={{ backgroundColor: darkMode ? "#020617" : colors.primary + "08" }}
     >
       <header
-        className={`border-b ${darkMode ? "border-slate-800" : "border-gray-200"}`}
-        style={{ backgroundColor: darkMode ? "#0f172a" : colors.primary + "12" }}
+        className={`pt-safe sticky top-0 z-10 border-b backdrop-blur transition-colors duration-200 ${
+          darkMode ? "border-slate-800" : "border-gray-200"
+        }`}
+        style={{ backgroundColor: darkMode ? "#0f172aE6" : colors.primary + "18" }}
       >
-        <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3 sm:px-6 sm:py-4">
           <button
             onClick={() => navigate("/dashboard")}
             aria-label="Back to dashboard"
-            className={`rounded-lg p-2 transition ${
+            className={`flex h-11 w-11 items-center justify-center rounded-lg transition ${
               darkMode ? "text-gray-300 hover:bg-slate-800" : "text-gray-600 hover:bg-gray-100"
             }`}
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className={`text-xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>
+          <h1 className={`text-lg font-bold sm:text-xl ${darkMode ? "text-white" : "text-gray-900"}`}>
             Export Data
           </h1>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
-        {loading ? (
+      <main className="pb-tabbar mx-auto max-w-5xl px-4 py-5 sm:px-6 sm:py-6">
+        {loadError ? (
+          <div
+            role="alert"
+            className={`rounded-xl border p-6 text-center shadow-sm ${
+              darkMode ? "border-red-800 bg-red-950/30" : "border-red-200 bg-red-50"
+            }`}
+          >
+            <p className={`text-sm font-semibold ${darkMode ? "text-red-200" : "text-red-900"}`}>
+              We could not load your transactions
+            </p>
+            <p className={`mt-1 text-sm ${darkMode ? "text-red-300/80" : "text-red-700"}`}>
+              {loadError}
+            </p>
+            <button
+              type="button"
+              onClick={() => void loadTransactions()}
+              className={`mt-4 inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition ${
+                darkMode
+                  ? "border-red-700 text-red-200 hover:bg-red-900/40"
+                  : "border-red-300 text-red-800 hover:bg-red-100"
+              }`}
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              Try again
+            </button>
+          </div>
+        ) : loading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
           </div>
         ) : (
           <>
+            <CurrencyWarning
+              unconvertedCurrencies={conversion.unconvertedCurrencies}
+              targetCurrency={defaultCurrency}
+              count={conversion.unconverted.length}
+              stale={conversion.stale}
+              pending={conversion.pending}
+              provider={conversion.provider}
+              asOf={conversion.asOf}
+              onRetry={conversion.retry}
+              darkMode={darkMode}
+            />
             <div
-              className={`mb-6 rounded-xl border p-6 shadow-sm transition-colors duration-200 ${
+              className={`mb-6 rounded-xl border p-4 shadow-sm transition-colors duration-200 sm:p-6 ${
                 darkMode ? "border-slate-700" : "border-transparent"
               }`}
               style={{ backgroundColor: darkMode ? "#1e293b" : colors.primary + "15" }}
             >
-              <div className="mb-4 grid grid-cols-3 gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
-                      Income
-                    </p>
-                    <span
-                      className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                        darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-200 text-gray-600"
-                      }`}
-                    >
-                      {defaultCurrency}
-                    </span>
-                  </div>
-                  <p className="text-xl font-bold text-emerald-600">
-                    <span className="mr-1 text-base font-semibold opacity-70">
-                      {getCurrencySymbol(defaultCurrency)}
-                    </span>
-                    {totalIncome.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </p>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
-                      Expenses
-                    </p>
-                    <span
-                      className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                        darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-200 text-gray-600"
-                      }`}
-                    >
-                      {defaultCurrency}
-                    </span>
-                  </div>
-                  <p className="text-xl font-bold text-red-600">
-                    <span className="mr-1 text-base font-semibold opacity-70">
-                      {getCurrencySymbol(defaultCurrency)}
-                    </span>
-                    {totalExpenses.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </p>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>Net</p>
-                    <span
-                      className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                        darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-200 text-gray-600"
-                      }`}
-                    >
-                      {defaultCurrency}
-                    </span>
-                  </div>
-                  <p
-                    className="text-xl font-bold"
-                    style={{ color: totalIncome - totalExpenses >= 0 ? colors.primary : "#dc2626" }}
+              {/*
+                Three stacked label/value rows on phones: a 3-column grid
+                leaves ~100px per cell, which clips any amount over 999.99.
+              */}
+              <div className="mb-4 flex flex-col gap-3 sm:grid sm:grid-cols-3 sm:gap-4">
+                {[
+                  { label: "Income", value: totalIncome, color: "text-emerald-600" },
+                  { label: "Expenses", value: totalExpenses, color: "text-red-600" },
+                  {
+                    label: "Net",
+                    value: totalIncome - totalExpenses,
+                    color: totalIncome - totalExpenses >= 0 ? colors.primary : "#dc2626",
+                  },
+                ].map(({ label, value, color }) => (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between gap-2 sm:block"
                   >
-                    <span className="mr-1 text-base font-semibold opacity-70">
-                      {getCurrencySymbol(defaultCurrency)}
-                    </span>
-                    {(totalIncome - totalExpenses).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </p>
-                </div>
+                    <div className="flex items-center gap-2">
+                      <p className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                        {label}
+                      </p>
+                      <span
+                        className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                          darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-200 text-gray-600"
+                        }`}
+                      >
+                        {defaultCurrency}
+                      </span>
+                    </div>
+                    <p
+                      className={`text-lg font-bold tabular-nums sm:mt-1 sm:text-xl ${color}`}
+                    >
+                      <span className="mr-1 text-base font-semibold opacity-70">
+                        {getCurrencySymbol(defaultCurrency)}
+                      </span>
+                      {value.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </p>
+                  </div>
+                ))}
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -415,6 +423,15 @@ export default function Export() {
           </>
         )}
       </main>
+
+      {toast && (
+        <Toast
+          tone={toast.tone}
+          message={toast.message}
+          darkMode={darkMode}
+          onDismiss={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

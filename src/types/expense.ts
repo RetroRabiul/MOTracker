@@ -115,15 +115,23 @@ export function getCurrencySymbol(code: string): string {
   return currencySymbolMap[code] || code;
 }
 
+/** Currencies the ISO standard renders without minor units. */
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  "BIF", "CLP", "DJF", "GNF", "ISK", "JPY", "KMF", "KRW", "PYG", "RWF", "UGX", "UYI", "VND", "VUV", "XAF", "XOF", "XPF",
+]);
+
 export function formatCurrency(amount: number, currency: string = "USD"): string {
+  // Zero-decimal currencies must not be padded to 2dp, so `Intl` picks the
+  // digit count rather than forcing a minimum of 2.
+  const fractionDigits = ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2;
   try {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
     }).format(amount);
   } catch {
-    return `${getCurrencySymbol(currency)}${amount.toFixed(2)}`;
+    return `${getCurrencySymbol(currency)}${amount.toFixed(fractionDigits)}`;
   }
 }

@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "postbuild": "node scripts/copy-apk.js",
+    "postbuild": "node scripts/copy-apk.js clean",
     "lint": "oxlint",
     "preview": "vite preview",
     "android:sync": "npm run build && cap sync android",
     "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug",
+    "android:publish": "node scripts/copy-apk.js publish",
     "android:open": "cap open android",
     "android:run": "npm run android:sync && cap run android"
   },

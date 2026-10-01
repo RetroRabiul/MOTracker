@@ -24,6 +24,13 @@ interface AuthContextType {
   resendSignupConfirmation: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  /**
+   * True while a password-recovery link has established a session, meaning the
+   * user may set a new password. Cleared by `updatePassword` or `logout`.
+   */
+  recoveryActive: boolean;
+  /** Completes a recovery started by `resetPassword`. */
+  updatePassword: (newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -49,6 +56,9 @@ export function getDisplayName(user: User | null): string {
 /** Where a confirmation link should land: straight into the tracker. */
 const CONFIRM_REDIRECT = () => `${window.location.origin}/dashboard`;
 
+/** Recovery links must land on the page that can actually set a new password. */
+export const RESET_PASSWORD_PATH = "/reset-password";
+
 const AUTH_CODE_MESSAGES: Record<string, string> = {
   // Supabase reports unconfirmed accounts as invalid_credentials to avoid leaking
   // which emails exist, so this message has to cover both cases.
@@ -71,7 +81,9 @@ const AUTH_CODE_MESSAGES: Record<string, string> = {
 
 function translateAuthError(error: AuthError, fallback: string): string {
   const code = error.code;
-  if (code && code in AUTH_CODE_MESSAGES) {
+  // `in` walks the prototype chain, so inherited keys would resolve to a
+  // function rather than a message.
+  if (code && Object.hasOwn(AUTH_CODE_MESSAGES, code)) {
     return AUTH_CODE_MESSAGES[code];
   }
 
@@ -112,13 +124,21 @@ function translateAuthError(error: AuthError, fallback: string): string {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recoveryActive, setRecoveryActive] = useState(false);
 
   useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
       setLoading(false);
+      // A recovery link establishes a session via PASSWORD_RECOVERY, which is
+      // the only signal that the user is allowed to set a new password.
+      if (event === "PASSWORD_RECOVERY") {
+        setRecoveryActive(true);
+      } else if (event === "SIGNED_OUT") {
+        setRecoveryActive(false);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -246,16 +266,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(translateAuthError(error, "Failed to sign out"));
     }
     setUser(null);
+    setRecoveryActive(false);
   };
 
+  /** Where a recovery link lands: the page that actually sets the new password. */
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: window.location.origin,
+      redirectTo: `${window.location.origin}${RESET_PASSWORD_PATH}`,
     });
 
     if (error) {
       throw new Error(translateAuthError(error, "Failed to send reset email"));
     }
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+    if (error) {
+      throw new Error(translateAuthError(error, "Failed to update your password"));
+    }
+    setRecoveryActive(false);
   };
 
   return (
@@ -272,6 +303,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         resendSignupConfirmation,
         logout,
         resetPassword,
+        recoveryActive,
+        updatePassword,
       }}
     >
       {children}
