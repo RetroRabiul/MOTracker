@@ -41,6 +41,9 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
+        // Serve the precached shell for navigations explicitly rather than relying on the
+        // implicit html-precache route, so deep links behave the same on every deploy.
+        navigateFallback: "index.html",
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
