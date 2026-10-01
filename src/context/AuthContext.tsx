@@ -14,6 +14,10 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, displayName: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
+  /** Emails a one-time sign-in code (and a magic link) to `email`. */
+  sendEmailCode: (email: string) => Promise<void>;
+  /** Completes a one-time-code sign in started by `sendEmailCode`. */
+  verifyEmailCode: (email: string, token: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
 }
@@ -52,6 +56,7 @@ const AUTH_CODE_MESSAGES: Record<string, string> = {
   provider_disabled: "This sign in provider is disabled",
   oauth_provider_not_supported: "This sign in provider is not supported",
   request_timeout: "Network error. Check your connection and try again.",
+  otp_expired: "That code has expired. Request a new one.",
 };
 
 function translateAuthError(error: AuthError, fallback: string): string {
@@ -83,6 +88,9 @@ function translateAuthError(error: AuthError, fallback: string): string {
   }
   if (/provider is not enabled|unsupported provider/i.test(message)) {
     return "This sign in provider is disabled";
+  }
+  if (/token has expired or is invalid|invalid token|one-time code/i.test(message)) {
+    return "That code has expired or is invalid. Request a new one.";
   }
   if (error.status === 0 || /failed to fetch|networkerror|network request failed/i.test(message)) {
     return "Network error. Check your connection and try again.";
@@ -148,6 +156,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  /**
+   * Sends a one-time sign-in code. Supabase emails the code from the Magic Link
+   * template, so that template must contain `{{ .Token }}`; the same email also
+   * carries a magic link, which `onAuthStateChange` picks up if it is opened.
+   */
+  const sendEmailCode = async (email: string) => {
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: window.location.origin,
+      },
+    });
+
+    if (error) {
+      throw new Error(translateAuthError(error, "Failed to send the sign-in code"));
+    }
+  };
+
+  const verifyEmailCode = async (email: string, token: string) => {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: token.trim(),
+      type: "email",
+    });
+
+    if (error) {
+      throw new Error(translateAuthError(error, "That code is not valid. Request a new one."));
+    }
+
+    if (!data.user) {
+      throw new Error("That code is not valid. Request a new one.");
+    }
+
+    setUser(data.user);
+  };
+
   const logout = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
@@ -168,7 +213,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, signup, loginWithGoogle, logout, resetPassword }}
+      value={{
+        user,
+        loading,
+        login,
+        signup,
+        loginWithGoogle,
+        sendEmailCode,
+        verifyEmailCode,
+        logout,
+        resetPassword,
+      }}
     >
       {children}
     </AuthContext.Provider>

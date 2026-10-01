@@ -43,6 +43,9 @@ and the Capacitor Android build.
    - enable **Email**
    - optionally enable **Google**: add the Google client ID/secret, then set the
      redirect to `https://<project-ref>.supabase.co/auth/v1/callback`
+   - for passwordless sign-in, edit **Email Templates → Magic Link** and make sure the body
+     includes `{{ .Token }}`. That is the 6-digit code the app's "Continue with email code"
+     button asks for; without it only the clickable link is emailed.
 4. **Authentication → URL Configuration**
    - **Site URL**: the origin you will serve the app from, e.g. `http://localhost:5173`
    - **Redirect URLs**: add `http://localhost:5173/**`, your production origin, and
@@ -118,6 +121,7 @@ npx cap open android        # or: cd android && gradlew assembleDebug
 ## 7. Features
 
 - Email/password and Google sign-in, sign-up, sign-out
+- Passwordless email-code sign-in (6-digit code), which also creates the account on first use
 - Add, edit, and delete income/expense entries with type, category, date, amount, currency,
   description, and an optional receipt photo
 - Live totals, income-vs-expense line chart, and per-category donut charts (week / month / all time)
