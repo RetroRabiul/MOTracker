@@ -22,8 +22,6 @@ import {
   Coins,
 } from "lucide-react";
 
-const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
-
 const paletteOptions: { key: ColorPalette; label: string; color: string }[] = [
   { key: "amethyst", label: "Amethyst", color: "#8b5cf6" },
   { key: "emerald", label: "Emerald", color: "#10b981" },
@@ -369,26 +367,17 @@ export default function Settings() {
           <p className={`mb-2 text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
             Install the Android APK directly on your phone.
           </p>
-          {isAndroid ? (
-            <a
-              href="/app.apk"
-              download
-              className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-            >
-              <Download className="h-4 w-4" />
-              Download APK
-            </a>
-          ) : (
-            <a
-              href="/app.apk"
-              className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200"
-            >
-              <Download className="h-4 w-4" />
-              Download APK (open on Android to install)
-            </a>
-          )}
+          <div
+            className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium opacity-50 cursor-not-allowed ${
+              darkMode ? "border-slate-700 bg-slate-800 text-gray-400" : "border-gray-300 bg-gray-100 text-gray-500"
+            }`}
+            aria-disabled="true"
+          >
+            <Download className="h-4 w-4" />
+            Download APK (coming soon)
+          </div>
           <p className={`mt-2 text-xs ${darkMode ? "text-gray-500" : "text-gray-400"}`}>
-            A signed release APK is available at <span className="font-mono">/public/app.apk</span>.
+            The APK will appear here once a build is published.
           </p>
         </div>
 

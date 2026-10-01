@@ -8,7 +8,11 @@
     "build": "tsc -b && vite build",
     "postbuild": "node scripts/copy-apk.js",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "android:sync": "npm run build && cap sync android",
+    "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug",
+    "android:open": "cap open android",
+    "android:run": "npm run android:sync && cap run android"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",

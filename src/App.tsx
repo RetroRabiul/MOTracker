@@ -13,6 +13,7 @@ import ExpenseList from "./pages/ExpenseList";
 import Analytics from "./pages/Analytics";
 import Export from "./pages/Export";
 import Settings from "./pages/Settings";
+import { isNativeApp, NOT_FOUND_ROUTE } from "./lib/platform";
 
 export default function App() {
   return (
@@ -21,7 +22,10 @@ export default function App() {
         <SettingsProvider>
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={<Landing />} />
+              <Route
+                path="/"
+                element={isNativeApp ? <Navigate to="/dashboard" replace /> : <Landing />}
+              />
               <Route
                 path="/login"
                 element={
@@ -94,7 +98,7 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<Navigate to={NOT_FOUND_ROUTE} replace />} />
             </Routes>
           </BrowserRouter>
         </SettingsProvider>
