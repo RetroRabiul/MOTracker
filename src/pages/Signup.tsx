@@ -1,8 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth, EMAIL_CONFIRMATION_MESSAGE } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { Loader2, Mail, Lock, Eye, EyeOff, User, Receipt } from "lucide-react";
+import { Loader2, Mail, Lock, Eye, EyeOff, User, Receipt, KeyRound } from "lucide-react";
+
+const RESEND_COOLDOWN_SECONDS = 60;
 
 export default function Signup() {
   const [name, setName] = useState("");
@@ -13,9 +15,23 @@ export default function Signup() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-  const { signup, loginWithGoogle } = useAuth();
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+  const [code, setCode] = useState("");
+  const [resendIn, setResendIn] = useState(0);
+  const {
+    signup,
+    loginWithGoogle,
+    verifySignupCode,
+    resendSignupConfirmation,
+  } = useAuth();
   const { colors, darkMode } = useTheme();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setTimeout(() => setResendIn((n) => n - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendIn]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -38,10 +54,43 @@ export default function Signup() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to create account";
       if (message === EMAIL_CONFIRMATION_MESSAGE) {
-        setSuccess("Account created! Check your email to confirm your account, then sign in.");
+        // Email confirmation is on, so stay here and take the code from the email.
+        setAwaitingConfirmation(true);
+        setResendIn(RESEND_COOLDOWN_SECONDS);
       } else {
         setError(message);
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setLoading(true);
+    try {
+      await verifySignupCode(email, code);
+      navigate("/dashboard");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "That code is not valid");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendIn > 0) return;
+    setError("");
+    setSuccess("");
+    setLoading(true);
+    try {
+      await resendSignupConfirmation(email);
+      setResendIn(RESEND_COOLDOWN_SECONDS);
+      setSuccess(`Confirmation email sent again to ${email.trim()}.`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to resend the email");
     } finally {
       setLoading(false);
     }
@@ -93,10 +142,12 @@ export default function Signup() {
             <Receipt className="h-8 w-8 text-white" />
           </div>
           <h1 className={`text-3xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>
-            Create Account
+            {awaitingConfirmation ? "Confirm your email" : "Create Account"}
           </h1>
           <p className={`mt-2 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
-            Start tracking your business expenses
+            {awaitingConfirmation
+              ? `Enter the 6-digit code we sent to ${email.trim()}`
+              : "Start tracking your business expenses"}
           </p>
         </div>
 
@@ -118,7 +169,73 @@ export default function Signup() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {awaitingConfirmation ? (
+            <form onSubmit={handleVerifyCode} className="flex flex-col gap-4">
+              <div>
+                <label htmlFor="confirm-code" className={labelClass}>
+                  6-digit confirmation code
+                </label>
+                <div className="relative">
+                  <KeyRound className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                  <input
+                    id="confirm-code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                    placeholder="123456"
+                    required
+                    className={`${fieldClass} text-center text-lg font-semibold tracking-[0.4em]`}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || code.length !== 6}
+                className="flex w-full items-center justify-center rounded-lg py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ backgroundColor: colors.primary }}
+              >
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirm and continue"}
+              </button>
+
+              <div className="flex items-center justify-between text-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAwaitingConfirmation(false);
+                    setCode("");
+                    setSuccess("");
+                    setError("");
+                  }}
+                  className={
+                    darkMode
+                      ? "text-slate-400 transition hover:text-slate-200"
+                      : "text-gray-500 transition hover:text-gray-700"
+                  }
+                >
+                  Use a different email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleResend()}
+                  disabled={resendIn > 0 || loading}
+                  className="disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{ color: colors.primary }}
+                >
+                  {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend email"}
+                </button>
+              </div>
+
+              <p className={`text-center text-xs ${darkMode ? "text-slate-500" : "text-gray-400"}`}>
+                Prefer the link in the email? Open the confirmation email and tap its button.
+              </p>
+            </form>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div>
               <label htmlFor="name" className={labelClass}>
                 Full Name
@@ -210,7 +327,10 @@ export default function Signup() {
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Create Account"}
             </button>
           </form>
+          )}
 
+          {!awaitingConfirmation && (
+            <>
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
               <div className={`w-full border-t ${darkMode ? "border-slate-700" : "border-gray-200"}`} />
@@ -260,6 +380,8 @@ export default function Signup() {
               Sign in
             </Link>
           </p>
+            </>
+          )}
         </div>
 
         <p className={`mt-6 text-center text-xs ${darkMode ? "text-slate-500" : "text-gray-400"}`}>

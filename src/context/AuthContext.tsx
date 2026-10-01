@@ -18,6 +18,10 @@ interface AuthContextType {
   sendEmailCode: (email: string) => Promise<void>;
   /** Completes a one-time-code sign in started by `sendEmailCode`. */
   verifyEmailCode: (email: string, token: string) => Promise<void>;
+  /** Confirms a new account from the 6-digit code in the signup confirmation email. */
+  verifySignupCode: (email: string, token: string) => Promise<void>;
+  /** Sends the signup confirmation email again. */
+  resendSignupConfirmation: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
 }
@@ -41,6 +45,9 @@ export function getDisplayName(user: User | null): string {
   }
   return user?.email ? user.email.split("@")[0] : "";
 }
+
+/** Where a confirmation link should land: straight into the tracker. */
+const CONFIRM_REDIRECT = () => `${window.location.origin}/dashboard`;
 
 const AUTH_CODE_MESSAGES: Record<string, string> = {
   invalid_credentials: "Invalid email or password",
@@ -131,7 +138,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { full_name: displayName.trim() } },
+      options: {
+        data: { full_name: displayName.trim() },
+        emailRedirectTo: CONFIRM_REDIRECT(),
+      },
     });
 
     if (error) {
@@ -193,6 +203,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user);
   };
 
+  /**
+   * Confirms a brand new account. The project has email confirmation enabled, so
+   * `signup` leaves the user unconfirmed; this turns the emailed code into a session.
+   */
+  const verifySignupCode = async (email: string, token: string) => {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: token.trim(),
+      type: "signup",
+    });
+
+    if (error) {
+      throw new Error(translateAuthError(error, "That code is not valid. Request a new one."));
+    }
+
+    if (!data.user) {
+      throw new Error("That code is not valid. Request a new one.");
+    }
+
+    setUser(data.user);
+  };
+
+  const resendSignupConfirmation = async (email: string) => {
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: email.trim(),
+      options: { emailRedirectTo: CONFIRM_REDIRECT() },
+    });
+
+    if (error) {
+      throw new Error(translateAuthError(error, "Failed to resend the confirmation email"));
+    }
+  };
+
   const logout = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
@@ -221,6 +265,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginWithGoogle,
         sendEmailCode,
         verifyEmailCode,
+        verifySignupCode,
+        resendSignupConfirmation,
         logout,
         resetPassword,
       }}
