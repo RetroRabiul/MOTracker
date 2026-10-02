@@ -539,6 +539,23 @@ export function ruleSenders(rule: SmsRule, platforms: SmsPlatform[]): string[] {
  * through its platform, so omitting it would silently match nothing and look
  * like an empty inbox instead of a wiring mistake.
  */
+/**
+ * Picks between candidates competing for the same message.
+ *
+ * Two rules from one sender often match equally well: "sent Tk 500" fits the
+ * expense pattern, and so does the pattern for money moved to your own account.
+ * Taking whichever rule happens to come first in storage would silently file a
+ * transfer as spending, so a transfer wins an otherwise equal read. It is the
+ * narrower claim of the two, and getting it wrong inflates every total the app
+ * shows.
+ */
+function prefers(a: ParsedCandidate, b: ParsedCandidate): boolean {
+  if (a.confidence !== b.confidence) return a.confidence > b.confidence;
+  if (a.type === "transfer" && b.type !== "transfer") return true;
+  if (b.type === "transfer" && a.type !== "transfer") return false;
+  return false;
+}
+
 export function applyRules(
   messages: SmsMessage[],
   rules: SmsRule[],
@@ -551,14 +568,14 @@ export function applyRules(
 
   const out: ParsedCandidate[] = [];
   for (const message of messages) {
+    let best: ParsedCandidate | null = null;
     for (const { rule, senders } of active) {
       if (!senders.some((sender) => senderMatches(message.address, sender))) continue;
       const candidate = parseMessage(message, rule);
-      if (candidate) {
-        out.push(candidate);
-        break;
-      }
+      if (!candidate) continue;
+      if (!best || prefers(candidate, best)) best = candidate;
     }
+    if (best) out.push(best);
   }
   return out;
 }

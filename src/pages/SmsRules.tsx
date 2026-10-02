@@ -31,6 +31,10 @@ export default function SmsRules() {
   // stand-in for it in a tester.
   const [fallbackDate] = useState(() => Date.now());
   const [saved, setSaved] = useState(false);
+  /** Inline name + number form, so connecting a source is two fields. */
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickName, setQuickName] = useState("");
+  const [quickNumber, setQuickNumber] = useState("");
 
   const selected = useMemo(() => rules.find((r) => r.id === selectedId) ?? rules[0], [rules, selectedId]);
   const selectedPlatform = useMemo(
@@ -76,10 +80,26 @@ export default function SmsRules() {
     [persistRules, rules, selectedId],
   );
 
-  const addPlatform = useCallback(() => {
-    const platform = createBlankPlatform();
+  /**
+   * Name and number are the only two things a source genuinely needs; the rule
+   * can be learned from its own messages once capture is on. So this creates a
+   * working source in two fields instead of opening a full editor with a
+   * pattern the user is not expected to be able to write.
+   */
+  const quickAddPlatform = useCallback(() => {
+    const numbers = cleanNumbers([quickNumber]);
+    if (numbers.length === 0) return;
+    const platform: SmsPlatform = {
+      id: createBlankPlatform().id,
+      name: quickName.trim() || numbers[0],
+      numbers,
+      enabled: true,
+    };
     persistPlatforms([...platforms, platform]);
-  }, [persistPlatforms, platforms]);
+    setQuickName("");
+    setQuickNumber("");
+    setQuickOpen(false);
+  }, [persistPlatforms, platforms, quickName, quickNumber]);
 
   const patchPlatform = useCallback(
     (id: string, changes: Partial<SmsPlatform>) => {
@@ -168,13 +188,72 @@ export default function SmsRules() {
             <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Platforms</h2>
             <button
               type="button"
-              onClick={addPlatform}
+              onClick={() => setQuickOpen((open) => !open)}
               className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-lg border border-black/10 px-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-white/15 dark:text-gray-300 dark:hover:bg-white/5"
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
               Add platform
             </button>
           </div>
+
+          {quickOpen && (
+            <div className="mt-3 rounded-xl border border-black/5 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-gray-900">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="quick-platform-name"
+                    className="block text-xs font-medium text-gray-500 dark:text-gray-400"
+                  >
+                    Name (optional)
+                  </label>
+                  <input
+                    id="quick-platform-name"
+                    value={quickName}
+                    onChange={(e) => setQuickName(e.target.value)}
+                    placeholder="bKash"
+                    className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-sm dark:border-white/15 dark:bg-gray-950 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="quick-platform-number"
+                    className="block text-xs font-medium text-gray-500 dark:text-gray-400"
+                  >
+                    Number it sends from
+                  </label>
+                  <input
+                    id="quick-platform-number"
+                    value={quickNumber}
+                    onChange={(e) => setQuickNumber(e.target.value)}
+                    placeholder="1968482020"
+                    inputMode="tel"
+                    className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-sm dark:border-white/15 dark:bg-gray-950 dark:text-white"
+                  />
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={quickAddPlatform}
+                  disabled={quickNumber.trim().length === 0}
+                  className="min-h-[2.5rem] rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Add source
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuickOpen(false)}
+                  className="min-h-[2.5rem] rounded-lg border border-black/10 px-4 text-sm font-semibold text-gray-700 dark:border-white/15 dark:text-gray-300"
+                >
+                  Cancel
+                </button>
+              </div>
+              <p className="mt-3 text-xs text-gray-600 dark:text-gray-400">
+                The pattern is learned from this number&apos;s own messages when you open SMS Import,
+                so nothing else has to be set up by hand.
+              </p>
+            </div>
+          )}
 
           {platforms.length === 0 ? (
             <p className="mt-3 rounded-xl border border-dashed border-black/10 p-4 text-sm text-gray-600 dark:border-white/15 dark:text-gray-400">

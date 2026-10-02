@@ -34,20 +34,25 @@ import {
   toIsoDate,
   type ParsedCandidate,
   type SmsMessage,
+  type SmsRule,
 } from "../lib/smsParser";
+import { proposeRules, type RuleProposal } from "../lib/smsLearner";
 import {
   activeSenders,
   clearSeenIds,
   loadAutoCapture,
-    loadAutoImport,
+  loadAutoImport,
   loadRulesWithPlatforms,
   loadSeenIds,
   rememberSeenIds,
+  saveRules,
 } from "../lib/smsRules";
 import {
   clearImportTimes,
   loadImportTimes,
+  newPlatformId,
   rememberImport,
+  savePlatforms,
   type SmsPlatform,
 } from "../lib/smsPlatforms";
 import { formatCurrency } from "../types/expense";
@@ -196,7 +201,17 @@ export default function SmsImport() {
   const [confirmReset, setConfirmReset] = useState(false);
 
   const supported = isSmsImportSupported();
-  const { rules, platforms } = useMemo(() => loadRulesWithPlatforms(), []);
+  /**
+   * Mutable because automatic setup adds a source and its rules mid-session.
+   * Everything downstream already keys off `rules` and `platforms`, so making
+   * them state rather than a one-shot read is the whole change.
+   */
+  const [{ rules, platforms }, setSources] = useState(() => loadRulesWithPlatforms());
+  /**
+   * Messages a rule could not read, grouped by sender for the setup prompt.
+   * Held separately from `candidates` because these never became candidates.
+   */
+  const [unmatched, setUnmatched] = useState<SmsMessage[]>([]);
   const senders = useMemo(() => activeSenders(rules, platforms), [rules, platforms]);
 
   useEffect(() => {
@@ -306,6 +321,7 @@ export default function SmsImport() {
     const parsed = applyRules(fresh, rules, platforms);
     if (parsed.length === 0) {
       setScanNote("A new message arrived, but no rule matched it. Check the rules screen.");
+      setUnmatched((prev) => [...prev, ...fresh.filter((m) => !prev.some((p) => p.id === m.id))]);
       return;
     }
     fold(parsed);
@@ -326,6 +342,41 @@ export default function SmsImport() {
     });
     return () => remove?.();
   }, [drainPending, supported]);
+
+  /**
+   * Saves a source and the rules learned from its messages, then re-reads
+   * everything that had failed so the new rules are applied immediately rather
+   * than on the next scan. Without this the user would have to scan again to
+   * see any effect, and would reasonably conclude the setup had failed.
+   */
+  const applyAutoSetup = useCallback(
+    (platform: SmsPlatform, newRules: SmsRule[], messages: SmsMessage[]) => {
+      // A number is often already attached to a source that simply has no rule
+      // yet. Teaching that source keeps one sender on one platform; creating a
+      // second one would leave two platforms competing for the same messages.
+      const existing = platforms.find((p) =>
+        p.numbers.some((n) => senderMatches(platform.numbers[0], n)),
+      );
+      const targetId = existing?.id ?? platform.id;
+      const nextPlatforms = existing
+        ? platforms.map((p) => (p.id === targetId ? { ...p, enabled: true } : p))
+        : [...platforms, platform];
+      const nextRules = [...rules, ...newRules.map((r) => ({ ...r, platformId: targetId }))];
+      savePlatforms(nextPlatforms);
+      saveRules(nextRules);
+      setSources({ rules: nextRules, platforms: nextPlatforms });
+
+      const byId = new Map<string, SmsMessage>();
+      for (const message of [...unmatched, ...messages]) byId.set(message.id, message);
+      const pool = [...byId.values()];
+      const parsed = applyRules(pool, nextRules, nextPlatforms);
+      fold(parsed);
+      const read = new Set(parsed.map((c) => c.messageId));
+      setUnmatched(pool.filter((m) => !read.has(m.id)));
+      return parsed.length;
+    },
+    [fold, platforms, rules, unmatched],
+  );
 
   const askPermission = useCallback(async () => {
     setError("");
@@ -352,6 +403,14 @@ export default function SmsImport() {
       const fresh = messages.filter((m) => !seen.has(m.id));
       const parsed = applyRules(fresh, rules, platforms);
       fold(parsed);
+      // Anything a rule could not read is offered back to the user for
+      // automatic setup, rather than being dropped with no explanation.
+      const readIds = new Set(parsed.map((c) => c.messageId));
+      setUnmatched((prev) => {
+        const kept = prev.filter((m) => !readIds.has(m.id));
+        const added = fresh.filter((m) => !readIds.has(m.id));
+        return [...kept, ...added.filter((m) => !kept.some((p) => p.id === m.id))];
+      });
       // Auto-import before the report so the per-platform "last added" column
       // reflects what was just written rather than the previous run.
       const added = await autoAdd(parsed);
@@ -370,6 +429,22 @@ export default function SmsImport() {
     () => candidates.filter((c) => !skipped.has(candidateFingerprint(c))),
     [candidates, skipped],
   );
+
+  /**
+   * Unreadable messages grouped by sender, so setup happens once per number
+   * rather than once per message.
+   */
+  const unmatchedSenders = useMemo(() => {
+    const grouped = new Map<string, SmsMessage[]>();
+    for (const message of unmatched) {
+      const existing = grouped.get(message.address);
+      if (existing) existing.push(message);
+      else grouped.set(message.address, [message]);
+    }
+    return [...grouped.entries()]
+      .map(([address, messages]) => ({ address, messages }))
+      .sort((a, b) => b.messages.length - a.messages.length);
+  }, [unmatched]);
 
   const updateCandidate = useCallback(
     (id: string, patch: Partial<ParsedCandidate>) => {
@@ -553,6 +628,23 @@ export default function SmsImport() {
                   ))}
                 </ul>
               )}
+
+              {unmatchedSenders.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    Not set up yet
+                  </p>
+                  {unmatchedSenders.map(({ address, messages }) => (
+                    <AutoSetup
+                      key={address}
+                      address={address}
+                      messages={messages}
+                      darkMode={darkMode}
+                      onApply={applyAutoSetup}
+                    />
+                  ))}
+                </div>
+              )}
             </section>
 
             {error && (
@@ -682,6 +774,200 @@ function Notice({ tone, icon, title, body, action }: NoticeProps) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+interface AutoSetupProps {
+  address: string;
+  messages: SmsMessage[];
+  darkMode: boolean;
+  /**
+   * Called with the source to create and the rules learned from these
+   * messages. The parent owns all storage writes so there is one place where
+   * sources and rules can diverge.
+   */
+  onApply: (platform: SmsPlatform, rules: SmsRule[], messages: SmsMessage[]) => number;
+}
+
+/**
+ * One tap, then a look before anything is saved.
+ *
+ * The friction this removes is the whole point: connecting a bank used to mean
+ * writing a regular expression by hand, and the alternative was a dead end
+ * that only reported failure. Here the messages are already captured, so the
+ * rules can be derived from them and, more importantly, tried against all of
+ * them first. What the user reads before saving is a measurement, not a
+ * promise.
+ */
+function AutoSetup({ address, messages, darkMode, onApply }: AutoSetupProps) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [proposal, setProposal] = useState<RuleProposal | null>(null);
+  const [name, setName] = useState("");
+  const [applied, setApplied] = useState(0);
+
+  const preview = useMemo(() => {
+    const platform = { id: `preview-${address}`, name: name || address };
+    return proposeRules(messages, platform);
+  }, [address, messages, name]);
+
+  const cardClass = darkMode ? "border border-gray-700 bg-gray-800" : "border border-gray-200 bg-white";
+  const labelClass = `text-xs font-medium ${darkMode ? "text-gray-400" : "text-gray-500"}`;
+
+  function start() {
+    setOpen(true);
+    setProposal(preview);
+  }
+
+  function save() {
+    setBusy(true);
+    try {
+      const platform: SmsPlatform = {
+        id: newPlatformId(),
+        name: name.trim() || address,
+        numbers: [address],
+        enabled: true,
+      };
+      // The rules were built against a preview id so they can be computed
+      // without persisting anything; re-point them at the real source.
+      const rules = preview.rules.map((rule) => ({ ...rule, platformId: platform.id }));
+      const added = onApply(platform, rules, messages);
+      setApplied(added);
+      setProposal(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (applied > 0) {
+    return (
+      <div className={`rounded-xl p-4 ${cardClass}`}>
+        <p className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+          {name || address} is set up. {applied} message{applied === 1 ? "" : "s"} ready to review.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`rounded-xl p-4 ${cardClass}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className={`text-sm font-semibold ${darkMode ? "text-gray-100" : "text-gray-900"}`}>
+            {address}
+          </p>
+          <p className={`mt-0.5 text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+            {messages.length} message{messages.length === 1 ? "" : "s"} captured but not understood yet
+          </p>
+        </div>
+        {!open && (
+          <button
+            type="button"
+            onClick={start}
+            className="min-h-[2.5rem] rounded-lg bg-blue-600 px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+          >
+            Set up automatically
+          </button>
+        )}
+      </div>
+
+      {open && proposal && (
+        <div className="mt-4 space-y-3">
+          <div>
+            <label className={labelClass} htmlFor={`auto-name-${address}`}>
+              Name this source
+            </label>
+            <input
+              id={`auto-name-${address}`}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={address}
+              className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm ${
+                darkMode
+                  ? "border-gray-600 bg-gray-900 text-white"
+                  : "border-gray-300 bg-white text-gray-900"
+              }`}
+            />
+          </div>
+
+          {proposal.rules.length > 0 ? (
+            <>
+              <p className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+                Found {proposal.rules.length} rule{proposal.rules.length === 1 ? "" : "s"} that read{" "}
+                <strong>
+                  {proposal.matched} of {proposal.total}
+                </strong>{" "}
+                message{proposal.total === 1 ? "" : "s"} from this sender.
+              </p>
+              <ul className="space-y-1">
+                {proposal.rules.map((rule) => (
+                  <li
+                    key={rule.id}
+                    className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-600"}`}
+                  >
+                    {rule.direction} · {rule.category} · {rule.defaultCurrency} — {rule.label}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+              These messages have no amount with words saying whether money went out or came in, so
+              there is nothing to learn. Nothing has been saved.
+            </p>
+          )}
+
+          {proposal.notes.map((note) => (
+            <p key={note} className={`text-xs ${darkMode ? "text-amber-300" : "text-amber-700"}`}>
+              {note}
+            </p>
+          ))}
+
+          <ul className="max-h-56 space-y-1 overflow-y-auto">
+            {proposal.checks.map((check) => (
+              <li key={check.messageId} className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+                {check.matched ? (
+                  <>
+                    <span className="text-emerald-600">reads as</span> {check.type} {check.amount}{" "}
+                    {check.merchant && `· ${check.merchant}`}
+                  </>
+                ) : (
+                  <>
+                    <span className="text-amber-600">not read</span> — {check.problem}
+                  </>
+                )}
+                <span className={darkMode ? "text-gray-500" : "text-gray-400"}> · {check.body.slice(0, 60)}</span>
+              </li>
+            ))}
+          </ul>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={save}
+              disabled={busy || proposal.rules.length === 0}
+              className="min-h-[2.5rem] flex-1 rounded-lg bg-blue-600 px-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+            >
+              {proposal.complete
+                ? "Save and add these messages"
+                : `Save ${proposal.rules.length} rule${proposal.rules.length === 1 ? "" : "s"} anyway`}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setProposal(null);
+              }}
+              className={`min-h-[2.5rem] rounded-lg border px-3 text-sm font-semibold ${
+                darkMode ? "border-gray-600 text-gray-300" : "border-gray-300 text-gray-700"
+              }`}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
