@@ -639,5 +639,10 @@ export function isAutoImportable(candidate: ParsedCandidate): boolean {
   if (candidate.problem) return false;
   // NaN fails this test rather than slipping through as a truthy amount.
   if (!(candidate.amount > 0)) return false;
+  // The confidence arithmetic alone would reach the high band here: an amount
+  // plus a currency is already 0.85. But "received Tk 500" with no counterparty
+  // names no description and no direction of travel the reader can check, so it
+  // is worth a glance even though the arithmetic says otherwise.
+  if (!candidate.merchant.trim()) return false;
   return confidenceBand(candidate.confidence) === "high";
 }
