@@ -200,6 +200,20 @@ export default function SmsRules() {
                         />
                       </Labeled>
 
+                      {/*
+                        A platform on its own does nothing. Messages from it are
+                        captured and then have nowhere to go, which used to show
+                        up as a count on the import screen with no explanation.
+                        Saying it here, next to the number, is where it can be
+                        acted on.
+                      */}
+                      {!rules.some((r) => r.enabled && r.platformId === platform.id) && (
+                        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+                          No rule is connected to this platform, so messages from it will be captured
+                          and then ignored. Pick this platform on a rule below.
+                        </p>
+                      )}
+
                       <div>
                         <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
                           Numbers it sends from

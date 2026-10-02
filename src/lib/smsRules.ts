@@ -85,7 +85,7 @@ export const STARTER_RULES: SmsRule[] = [
     platformId: "platform-bkash",
     sender: "",
     pattern:
-      "(?:you have sent|you sent|sent)[\\s\u09f3]*(?:tk|taka)?[\\s\u09f3]*(?<amount>[\\d,.]*\\d)\\s*(?:tk|taka|\u09f3)?(?:[^.]{0,40}?\\bto\\b\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60}))?",
+      "(?:you have )?(?:sent|send|sending)[\\s\u09f3]*(?:tk|taka)?[\\s\u09f3]*(?<amount>[\\d,.]*\\d)\\s*(?:tk|taka|\u09f3)?(?:[^.]{0,40}?\\bto\\b\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60}))?",
     defaultCurrency: "BDT",
     category: "Transfer",
     enabled: true,
@@ -97,7 +97,7 @@ export const STARTER_RULES: SmsRule[] = [
     platformId: "platform-bkash",
     sender: "",
     pattern:
-      "(?:you have received|you received|received)[\\s\u09f3]*(?:tk|taka)?[\\s\u09f3]*(?<amount>[\\d,.]*\\d)\\s*(?:tk|taka|\u09f3)?(?:[^.]{0,40}?\\bfrom\\b\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60}))?",
+      "(?:you have )?(?:received|receive|receiving)[\\s\u09f3]*(?:tk|taka)?[\\s\u09f3]*(?<amount>[\\d,.]*\\d)\\s*(?:tk|taka|\u09f3)?(?:[^.]{0,40}?\\bfrom\\b\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60}))?",
     defaultCurrency: "BDT",
     category: "Transfer",
     enabled: true,

@@ -541,7 +541,7 @@ export default function SmsImport() {
                         {row.fresh > 0 ? (
                           <>
                             {row.fresh} new
-                            {row.parsed < row.fresh ? ` · ${row.fresh - row.parsed} need a rule` : ""}
+                            {row.parsed < row.fresh ? ` \u00b7 ${row.fresh - row.parsed} no rule matched` : ""}
                           </>
                         ) : row.lastImportAt ? (
                           <>Up to date · last added {ago(Date.now() - row.lastImportAt)}</>
