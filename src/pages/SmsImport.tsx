@@ -29,6 +29,7 @@ import {
   candidateFingerprint,
   confidenceBand,
   mergeCandidates,
+  senderMatches,
   toIsoDate,
   type ParsedCandidate,
   type SmsMessage,
@@ -37,10 +38,16 @@ import {
   activeSenders,
   clearSeenIds,
   loadAutoCapture,
-  loadRules,
+  loadRulesWithPlatforms,
   loadSeenIds,
   rememberSeenIds,
 } from "../lib/smsRules";
+import {
+  clearImportTimes,
+  loadImportTimes,
+  rememberImport,
+  type SmsPlatform,
+} from "../lib/smsPlatforms";
 import { formatCurrency } from "../types/expense";
 import ConfirmDialog from "../components/ConfirmDialog";
 import Toast, { type ToastTone } from "../components/Toast";
@@ -55,6 +62,87 @@ const WINDOWS: Array<{ value: Window_; label: string }> = [
 
 /** Bounded so a bad rule cannot stall the UI on a full inbox. */
 const MAX_MESSAGES = 100;
+
+interface PlatformReport {
+  platformId: string;
+  name: string;
+  /** Messages this platform has sent inside the scanned window. */
+  total: number;
+  /** How many were not already imported or dismissed. */
+  fresh: number;
+  /** How many of those parsed cleanly into a candidate. */
+  parsed: number;
+  /** When this platform last had a transaction approved. */
+  lastImportAt: number | undefined;
+}
+
+const ago = (ms: number): string => {
+  const minutes = Math.round(ms / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+};
+
+/**
+ * What the scan found, per platform.
+ *
+ * `fresh` counts messages that had not been handled before, which is the same
+ * question the seen list answers elsewhere, so "up to date" cannot disagree with
+ * what gets skipped. The import time is reported rather than used as a cutoff:
+ * if an approval ever failed, a hard cutoff would make that money unreachable.
+ */
+function buildReport(
+  messages: SmsMessage[],
+  fresh: SmsMessage[],
+  parsed: ParsedCandidate[],
+  platforms: SmsPlatform[],
+  importTimes: Record<string, number>,
+): PlatformReport[] {
+  const totals = new Map<string, number>();
+  const freshCounts = new Map<string, number>();
+  const parsedCounts = new Map<string, number>();
+
+  // A message can belong to a platform by address, or through the rule that
+  // matched it; both are recorded so a candidate always attributes somewhere.
+  const bump = (map: Map<string, number>, id: string) => map.set(id, (map.get(id) ?? 0) + 1);
+  for (const message of messages) {
+    for (const platform of platforms) {
+      if (platform.enabled && platform.numbers.some((n) => senderMatches(message.address, n))) {
+        bump(totals, platform.id);
+        break;
+      }
+    }
+  }
+  for (const message of fresh) {
+    for (const platform of platforms) {
+      if (platform.enabled && platform.numbers.some((n) => senderMatches(message.address, n))) {
+        bump(freshCounts, platform.id);
+        break;
+      }
+    }
+  }
+  for (const candidate of parsed) {
+    if (candidate.platformId) bump(parsedCounts, candidate.platformId);
+  }
+
+  const rows: PlatformReport[] = [];
+  for (const platform of platforms) {
+    if (!platform.enabled) continue;
+    const total = totals.get(platform.id) ?? 0;
+    if (total === 0) continue;
+    rows.push({
+      platformId: platform.id,
+      name: platform.name || platform.numbers[0] || "Unnamed platform",
+      total,
+      fresh: freshCounts.get(platform.id) ?? 0,
+      parsed: parsedCounts.get(platform.id) ?? 0,
+      lastImportAt: importTimes[platform.id],
+    });
+  }
+  return rows;
+}
 
 export default function SmsImport() {
   const navigate = useNavigate();
@@ -89,14 +177,27 @@ export default function SmsImport() {
     },
     [],
   );
+
+  /**
+   * Notes that a platform has reached this point in time, which is what the
+   * next scan compares against to decide "up to date".
+   */
+  const markImported = useCallback((candidate: ParsedCandidate) => {
+    if (!candidate.platformId) return;
+    if (!rememberImport(candidate.platformId, candidate.receivedAt)) return;
+    setImportTimes(loadImportTimes());
+  }, []);
   const [scanNote, setScanNote] = useState<string | null>(null);
+  /** Per-platform outcome of the last scan, shown under the Scan button. */
+  const [report, setReport] = useState<PlatformReport[]>([]);
+  const [importTimes, setImportTimes] = useState<Record<string, number>>(() => loadImportTimes());
   const [error, setError] = useState("");
   const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
 
   const supported = isSmsImportSupported();
-  const rules = useMemo(() => loadRules(), []);
-  const senders = useMemo(() => activeSenders(rules), [rules]);
+  const { rules, platforms } = useMemo(() => loadRulesWithPlatforms(), []);
+  const senders = useMemo(() => activeSenders(rules, platforms), [rules, platforms]);
 
   useEffect(() => {
     if (!supported) return;
@@ -143,13 +244,13 @@ export default function SmsImport() {
     const seen = loadSeenIds();
     const fresh = queued.filter((m) => !seen.has(m.id));
     if (fresh.length === 0) return;
-    const parsed = applyRules(fresh, rules);
+    const parsed = applyRules(fresh, rules, platforms);
     if (parsed.length === 0) {
       setScanNote("A new message arrived, but no rule matched it. Check the rules screen.");
       return;
     }
     fold(parsed);
-  }, [fold, rules]);
+  }, [fold, platforms, rules]);
 
   useEffect(() => {
     if (!supported) return;
@@ -175,8 +276,9 @@ export default function SmsImport() {
   const scan = useCallback(async () => {
     setError("");
     setScanNote(null);
+    setReport([]);
     if (senders.length === 0) {
-      setError("No sender is configured. Add one on the SMS rules screen first.");
+      setError("No platform is connected. Add one on the SMS sources screen first.");
       return;
     }
     setScanning(true);
@@ -185,24 +287,16 @@ export default function SmsImport() {
       const messages: SmsMessage[] = await readSmsInbox(senders, since, MAX_MESSAGES);
       const seen = loadSeenIds();
       const fresh = messages.filter((m) => !seen.has(m.id));
-      const parsed = applyRules(fresh, rules);
+      const parsed = applyRules(fresh, rules, platforms);
       fold(parsed);
+      setReport(buildReport(messages, fresh, parsed, platforms, importTimes));
 
-      if (messages.length === 0) {
-        setScanNote(`No messages from ${senders.join(", ")} in the last ${days} days.`);
-      } else if (fresh.length === 0) {
-        setScanNote("Every matching message has already been imported or dismissed.");
-      } else if (parsed.length === 0) {
-        setScanNote(
-          `Read ${fresh.length} message(s), but no rule matched. Add or adjust a rule on the SMS rules screen.`,
-        );
-      }
-    } catch (err) {
+      } catch (err) {
       setError(err instanceof Error ? err.message : "Could not read the SMS inbox");
     } finally {
       setScanning(false);
     }
-  }, [days, fold, rules, senders]);
+  }, [days, fold, importTimes, platforms, rules, senders]);
 
   const visible = useMemo(
     () => candidates.filter((c) => !skipped.has(candidateFingerprint(c))),
@@ -233,6 +327,7 @@ export default function SmsImport() {
         });
         rememberSeenIds([candidate.messageId]);
         void resolvePendingSms([candidate.messageId]);
+        markImported(candidate);
         setSkipped((prev) => new Set(prev).add(candidateFingerprint(candidate)));
         setToast({ message: `Added ${formatCurrency(candidate.amount, candidate.currency)}`, tone: "success" });
       } catch (err) {
@@ -263,6 +358,7 @@ export default function SmsImport() {
         });
         rememberSeenIds([candidate.messageId]);
         void resolvePendingSms([candidate.messageId]);
+        markImported(candidate);
         ok++;
       } catch (err) {
         failed.push(err instanceof Error ? err.message : "unknown error");
@@ -380,6 +476,33 @@ export default function SmsImport() {
               {scanNote && (
                 <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">{scanNote}</p>
               )}
+
+              {report.length > 0 && (
+                <ul className="mt-3 space-y-1.5">
+                  {report.map((row) => (
+                    <li
+                      key={row.platformId}
+                      className="flex items-baseline justify-between gap-3 text-sm"
+                    >
+                      <span className="min-w-0 truncate font-medium text-gray-900 dark:text-white">
+                        {row.name}
+                      </span>
+                      <span className="shrink-0 text-gray-600 dark:text-gray-400">
+                        {row.fresh > 0 ? (
+                          <>
+                            {row.fresh} new
+                            {row.parsed < row.fresh ? ` · ${row.fresh - row.parsed} need a rule` : ""}
+                          </>
+                        ) : row.lastImportAt ? (
+                          <>Up to date · last added {ago(Date.now() - row.lastImportAt)}</>
+                        ) : (
+                          <>Nothing new yet</>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
 
             {error && (
@@ -458,6 +581,9 @@ export default function SmsImport() {
         onCancel={() => setConfirmReset(false)}
         onConfirm={() => {
           clearSeenIds();
+          clearImportTimes();
+          setImportTimes({});
+          setReport([]);
           setCandidateList([]);
           setSkipped(new Set());
           setConfirmReset(false);

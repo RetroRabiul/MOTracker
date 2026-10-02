@@ -1,4 +1,5 @@
-import { normaliseBody, type SmsRule } from "./smsParser";
+import { ruleSenders, type SmsRule } from "./smsParser";
+import { loadPlatforms, platformsFromLegacySenders, savePlatforms, type SmsPlatform } from "./smsPlatforms";
 
 const RULES_KEY = "sms_import_rules_v1";
 const SEEN_KEY = "sms_import_seen_v1";
@@ -39,12 +40,19 @@ export function saveAutoCapture(enabled: boolean): boolean {
  * fail closed - if the wording drifts, the pattern stops matching and the
  * message is left for review rather than imported with a wrong amount.
  */
+export const STARTER_PLATFORMS: SmsPlatform[] = [
+  // The numbers are what bKash actually sends from. They are a starting point
+  // for the user to correct, exactly like the patterns below.
+  { id: "platform-bkash", name: "bKash", numbers: ["bKash", "bKash-DM"], enabled: true },
+];
+
 export const STARTER_RULES: SmsRule[] = [
   {
     id: "bkash-sent",
     label: "bKash - money sent",
     direction: "expense",
-    sender: "bKash",
+    platformId: "platform-bkash",
+    sender: "",
     pattern:
       "(?:you have sent|you sent|sent)[\\s\u09f3]*(?:tk|taka)?[\\s\u09f3]*(?<amount>[\\d,.]+)\\s*(?:tk|taka|\u09f3)?[^.]{0,40}?\\bto\\b\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
     defaultCurrency: "BDT",
@@ -55,7 +63,8 @@ export const STARTER_RULES: SmsRule[] = [
     id: "bkash-received",
     label: "bKash - money received",
     direction: "income",
-    sender: "bKash",
+    platformId: "platform-bkash",
+    sender: "",
     pattern:
       "(?:you have received|you received|received)[\\s\u09f3]*(?:tk|taka)?[\\s\u09f3]*(?<amount>[\\d,.]+)\\s*(?:tk|taka|\u09f3)?[^.]{0,40}?\\bfrom\\b\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
     defaultCurrency: "BDT",
@@ -66,17 +75,22 @@ export const STARTER_RULES: SmsRule[] = [
     id: "bkash-cashout",
     label: "bKash - cash out",
     direction: "expense",
-    sender: "bKash",
+    platformId: "platform-bkash",
+    sender: "",
     pattern:
       "cash\\s*out[^.]{0,60}?(?<amount>[\\d,.]+)[^.]{0,40}?(?:from\\s+)?(?:agent|point)\\s*[:\\-]?\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
     defaultCurrency: "BDT",
     category: "Cash",
     enabled: true,
   },
+  // The two bank rules stay unattached on purpose: the app has no idea which
+  // bank you use or what shortcode it sends from, so attaching one is the
+  // user's job.
   {
     id: "bank-debit",
     label: "Bank - account debit",
     direction: "expense",
+    platformId: "",
     sender: "",
     pattern:
       "(?:debit|dr|withdrawn|withdrawal|paid|purchase|pos)\\b[^0-9]{0,40}(?<amount>[\\d,.]+)\\s*(?:pkr|bdt|usd|inr|rs|tk|\u09f3)?[^.]{0,30}?(?:to\\s+)?(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
@@ -88,6 +102,7 @@ export const STARTER_RULES: SmsRule[] = [
     id: "bank-credit",
     label: "Bank - account credit",
     direction: "income",
+    platformId: "",
     sender: "",
     pattern:
       "(?:credit|cr|received|salary|refund)\\b[^0-9]{0,40}(?<amount>[\\d,.]+)\\s*(?:pkr|bdt|usd|inr|rs|tk|\u09f3)?[^.]{0,30}?(?:from\\s+)?(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
@@ -127,9 +142,38 @@ export function loadRules(): SmsRule[] {
     return STARTER_RULES.map((r) => ({ ...r }));
   }
   // Drop anything that is not a usable rule rather than failing the whole list.
-  return stored.filter(
-    (r) => r && typeof r.id === "string" && typeof r.pattern === "string" && typeof r.sender === "string",
-  );
+  // `sender` is tolerated as absent so rules saved before platforms existed
+  // still load; the migration below attaches them to a platform.
+  return stored
+    .filter((r) => r && typeof r.id === "string" && typeof r.pattern === "string")
+    .map((r) => ({ ...r, platformId: typeof r.platformId === "string" ? r.platformId : "" }));
+}
+
+/**
+ * Rules and platforms as one consistent pair, migrating pre-platform senders on
+ * the way.
+ *
+ * Rules used to carry their own sender. Anyone who connected a service before
+ * platforms existed has that configuration sitting in a `sender` field with
+ * nothing to attach it to, so each distinct sender is turned into a platform
+ * named after it and the rule is pointed at the new one. The legacy field is
+ * then cleared, leaving the platform as the single place a number is edited.
+ */
+export function loadRulesWithPlatforms(): { rules: SmsRule[]; platforms: SmsPlatform[] } {
+  const storedPlatforms = loadPlatforms();
+  // First run, or the user deleted every platform: offer the starter one rather
+  // than an empty list with no obvious way forward.
+  const platforms = storedPlatforms.length > 0 ? storedPlatforms : STARTER_PLATFORMS.map((p) => ({ ...p }));
+
+  const rules = loadRules();
+  const { platforms: migrated, migrated: count } = platformsFromLegacySenders(rules, platforms);
+  const touched = rules.map((r) => ({ ...r, sender: "" }));
+
+  if (count > 0 || storedPlatforms.length === 0) {
+    savePlatforms(migrated);
+    saveRules(touched);
+  }
+  return { rules: touched, platforms: migrated };
 }
 
 export function saveRules(rules: SmsRule[]): boolean {
@@ -155,6 +199,7 @@ export function createBlankRule(): SmsRule {
     id: newRuleId(),
     label: "New rule",
     direction: "expense",
+    platformId: "",
     sender: "",
     pattern: "(?<amount>[\\d,.]+)",
     defaultCurrency: "USD",
@@ -166,19 +211,23 @@ export function createBlankRule(): SmsRule {
 /**
  * Senders the inbox scan should ask the native layer for. Blank senders are
  * excluded, and duplicates are collapsed after normalisation so `+8801...` and
- * `0180...` are not both requested.
+ * `0180...` are not both requested. A disabled platform contributes nothing even
+ * if its rules are still enabled, so the user can pause a service in one place.
+ *
+ * `platforms` is required rather than defaulted: a rule resolves its senders
+ * through its platform, so omitting it would silently watch no senders at all.
  */
-export function activeSenders(rules: SmsRule[]): string[] {
+export function activeSenders(rules: SmsRule[], platforms: SmsPlatform[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const rule of rules) {
     if (!rule.enabled) continue;
-    const sender = normaliseBody(rule.sender);
-    if (!sender) continue;
-    const key = sender.replace(/[^\dA-Za-z]/g, "").toLowerCase();
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    out.push(sender);
+    for (const sender of ruleSenders(rule, platforms)) {
+      const key = sender.replace(/[^\dA-Za-z]/g, "").toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(sender);
+    }
   }
   return out;
 }

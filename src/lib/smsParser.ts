@@ -11,6 +11,8 @@
  * asks.
  */
 
+import { platformNumbers, type SmsPlatform } from "./smsPlatforms";
+
 export type SmsDirection = "expense" | "income";
 
 export interface SmsRule {
@@ -20,8 +22,14 @@ export interface SmsRule {
   /** Whether this rule produces expenses or income. */
   direction: SmsDirection;
   /**
-   * Substring of the sender address this rule applies to. Empty means the rule
-   * is a manual/paste rule and is not used for inbox scanning.
+   * Platform this rule belongs to. The platform owns the sender addresses, so
+   * connecting a service means setting its number once rather than repeating
+   * it on every rule.
+   */
+  platformId: string;
+  /**
+   * Legacy sender substring, kept only so rules saved before platforms existed
+   * keep working. Migrated into a platform on load and left empty afterwards.
    */
   sender: string;
   /**
@@ -54,6 +62,8 @@ export interface ParsedCandidate {
   messageId: string;
   ruleId: string;
   ruleLabel: string;
+  /** Platform the message came from, empty for a manual paste. */
+  platformId: string;
   address: string;
   rawBody: string;
   receivedAt: number;
@@ -430,6 +440,7 @@ export function parseMessage(
     messageId: message.id,
     ruleId: rule.id,
     ruleLabel: rule.label,
+    platformId: rule.platformId ?? "",
     address: message.address,
     rawBody: message.body,
     receivedAt: message.date,
@@ -503,13 +514,37 @@ export function parseMessage(
   };
 }
 
-/** Every enabled rule is tried; the first match wins so ordering is the user's dial. */
-export function applyRules(messages: SmsMessage[], rules: SmsRule[]): ParsedCandidate[] {
-  const active = rules.filter((r) => r.enabled && r.sender.trim());
+/**
+ * Every address a rule listens to: the numbers of the platform it belongs to,
+ * or its own legacy sender when it has none. A rule with neither is a manual
+ * paste rule and is never matched against the inbox.
+ */
+export function ruleSenders(rule: SmsRule, platforms: SmsPlatform[]): string[] {
+  if (rule.platformId) return platformNumbers(platforms, rule.platformId);
+  return (rule.sender ?? "").trim() ? [rule.sender.trim()] : [];
+}
+
+/**
+ * Every enabled rule is tried; the first match wins so ordering is the user's dial.
+ *
+ * `platforms` is required rather than defaulted: a rule resolves its senders
+ * through its platform, so omitting it would silently match nothing and look
+ * like an empty inbox instead of a wiring mistake.
+ */
+export function applyRules(
+  messages: SmsMessage[],
+  rules: SmsRule[],
+  platforms: SmsPlatform[],
+): ParsedCandidate[] {
+  const active = rules
+    .filter((r) => r.enabled)
+    .map((rule) => ({ rule, senders: ruleSenders(rule, platforms) }))
+    .filter((entry) => entry.senders.length > 0);
+
   const out: ParsedCandidate[] = [];
   for (const message of messages) {
-    for (const rule of active) {
-      if (!senderMatches(message.address, rule.sender)) continue;
+    for (const { rule, senders } of active) {
+      if (!senders.some((sender) => senderMatches(message.address, sender))) continue;
       const candidate = parseMessage(message, rule);
       if (candidate) {
         out.push(candidate);

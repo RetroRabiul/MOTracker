@@ -1,21 +1,29 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, FlaskConical, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, FlaskConical, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { compileRule, confidenceBand, parseMessage, type SmsDirection, type SmsRule } from "../lib/smsParser";
-import { createBlankRule, loadRules, resetRules, saveRules } from "../lib/smsRules";
+import { createBlankRule, loadRulesWithPlatforms, resetRules, saveRules } from "../lib/smsRules";
+import {
+  cleanNumbers,
+  createBlankPlatform,
+  savePlatforms,
+  type SmsPlatform,
+} from "../lib/smsPlatforms";
 import { CURRENCIES } from "../types/expense";
 
 /**
- * Rules editor with a live tester.
+ * Sources screen: the platforms the user has connected, and the rules that parse
+ * them.
  *
- * Patterns are the part of this feature most likely to be wrong, and the user is
- * the only one who can see a real bKash message. So every edit is testable
- * against pasted text in place, rather than saved and discovered later on the
- * import screen.
+ * Two things are edited here on purpose. A platform is which numbers to watch,
+ * and the user is the only one who knows them. A rule is how to read a message
+ * from that platform, and only a real message can confirm that. Keeping both on
+ * one screen means connecting a service is name plus number, with no regex
+ * required to get started.
  */
 export default function SmsRules() {
   const navigate = useNavigate();
-  const [rules, setRules] = useState<SmsRule[]>(() => loadRules());
+  const [{ rules, platforms }, setLoaded] = useState(() => loadRulesWithPlatforms());
   const [selectedId, setSelectedId] = useState<string>(() => rules[0]?.id ?? "");
   const [sample, setSample] = useState("");
   // Captured once so the preview is not impure during render. A rule with no
@@ -25,35 +33,80 @@ export default function SmsRules() {
   const [saved, setSaved] = useState(false);
 
   const selected = useMemo(() => rules.find((r) => r.id === selectedId) ?? rules[0], [rules, selectedId]);
+  const selectedPlatform = useMemo(
+    () => platforms.find((p) => p.id === selected?.platformId),
+    [platforms, selected?.platformId],
+  );
 
-  const persist = useCallback((next: SmsRule[]) => {
-    setRules(next);
-    const ok = saveRules(next);
+  const flash = useCallback((ok: boolean) => {
     setSaved(ok);
     if (ok) setTimeout(() => setSaved(false), 2000);
   }, []);
 
+  const persistRules = useCallback((next: SmsRule[]) => {
+    setLoaded({ rules: next, platforms });
+    flash(saveRules(next));
+  }, [flash, platforms]);
+
   const patch = useCallback(
     (id: string, changes: Partial<SmsRule>) => {
-      persist(rules.map((r) => (r.id === id ? { ...r, ...changes } : r)));
+      persistRules(rules.map((r) => (r.id === id ? { ...r, ...changes } : r)));
     },
-    [persist, rules],
+    [persistRules, rules],
   );
+
+  const persistPlatforms = useCallback((next: SmsPlatform[]) => {
+    setLoaded({ rules, platforms: next });
+    flash(savePlatforms(next));
+  }, [flash, rules]);
 
   const addRule = useCallback(() => {
     const rule = createBlankRule();
-    persist([...rules, rule]);
+    persistRules([...rules, rule]);
     setSelectedId(rule.id);
     setSample("");
-  }, [persist, rules]);
+  }, [persistRules, rules]);
 
   const removeRule = useCallback(
     (id: string) => {
       const next = rules.filter((r) => r.id !== id);
-      persist(next);
+      persistRules(next);
       if (selectedId === id) setSelectedId(next[0]?.id ?? "");
     },
-    [persist, rules, selectedId],
+    [persistRules, rules, selectedId],
+  );
+
+  const addPlatform = useCallback(() => {
+    const platform = createBlankPlatform();
+    persistPlatforms([...platforms, platform]);
+  }, [persistPlatforms, platforms]);
+
+  const patchPlatform = useCallback(
+    (id: string, changes: Partial<SmsPlatform>) => {
+      persistPlatforms(platforms.map((p) => (p.id === id ? { ...p, ...changes } : p)));
+    },
+    [persistPlatforms, platforms],
+  );
+
+  const patchPlatformNumber = useCallback(
+    (id: string, index: number, value: string) => {
+      const platform = platforms.find((p) => p.id === id);
+      if (!platform) return;
+      const numbers = [...platform.numbers];
+      numbers[index] = value;
+      // Stored clean so "bKash" and "bkash" cannot both become senders.
+      patchPlatform(id, { numbers: cleanNumbers(numbers.length ? numbers : [""]) });
+    },
+    [patchPlatform, platforms],
+  );
+
+  const removePlatform = useCallback(
+    (id: string) => {
+      // Rules keep pointing at the id; with it gone they show as unattached
+      // rather than silently matching a different platform's messages.
+      persistPlatforms(platforms.filter((p) => p.id !== id));
+    },
+    [persistPlatforms, platforms],
   );
 
   const preview = useMemo(() => {
@@ -61,10 +114,13 @@ export default function SmsRules() {
     const compiled = compileRule(selected);
     if (compiled.regex === null) return { problem: compiled.problem, candidate: null };
     if (!sample.trim()) return { problem: null, candidate: null, idle: true };
+    // Testing against the platform's real sender address means the sample goes
+    // through the same sender check the inbox will apply.
+    const address = selectedPlatform?.numbers[0] || selected.sender || "SENDER";
     const candidate = parseMessage(
       {
         id: "sample",
-        address: selected.sender || "SENDER",
+        address,
         body: sample,
         date: fallbackDate,
         read: true,
@@ -73,7 +129,7 @@ export default function SmsRules() {
     );
     if (!candidate) return { problem: "Pattern does not match this message", candidate: null };
     return { problem: candidate.problem, candidate };
-  }, [fallbackDate, sample, selected]);
+  }, [fallbackDate, sample, selected, selectedPlatform]);
 
   return (
     <div className="min-h-dvh bg-gray-50 dark:bg-gray-950">
@@ -88,7 +144,7 @@ export default function SmsRules() {
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </button>
           <h1 className="min-w-0 flex-1 truncate text-lg font-bold text-gray-900 sm:text-xl dark:text-white">
-            SMS rules
+            SMS sources
           </h1>
           {saved && (
             <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
@@ -101,34 +157,143 @@ export default function SmsRules() {
 
       <main className="mx-auto max-w-3xl px-4 pb-tabbar pt-6">
         <p className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-          These starter patterns are a starting point, not verified truth. bKash and bank wording
-          differs by product and language, so test each rule against a real message below before
-          relying on it.
+          Add a platform and the number it sends from, and the app will read messages from that
+          number only. The starter patterns are a starting point, not verified truth: bKash and bank
+          wording differs by product and language, so test each rule against a real message below
+          before relying on it.
         </p>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={addRule}
-            className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-lg bg-blue-600 px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            Add rule
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const fresh = resetRules();
-              setRules(fresh);
-              setSelectedId(fresh[0]?.id ?? "");
-              setSaved(true);
-              setTimeout(() => setSaved(false), 2000);
-            }}
-            className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-lg border border-black/10 px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-white/15 dark:text-gray-300 dark:hover:bg-white/5"
-          >
-            <RotateCcw className="h-4 w-4" aria-hidden="true" />
-            Restore defaults
-          </button>
+        <section className="mt-6">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Platforms</h2>
+            <button
+              type="button"
+              onClick={addPlatform}
+              className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-lg border border-black/10 px-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-white/15 dark:text-gray-300 dark:hover:bg-white/5"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Add platform
+            </button>
+          </div>
+
+          {platforms.length === 0 ? (
+            <p className="mt-3 rounded-xl border border-dashed border-black/10 p-4 text-sm text-gray-600 dark:border-white/15 dark:text-gray-400">
+              No platforms yet. Add one to choose which numbers the app watches.
+            </p>
+          ) : (
+            <ul className="mt-3 space-y-3">
+              {platforms.map((platform) => (
+                <li
+                  key={platform.id}
+                  className="rounded-xl border border-black/5 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-gray-900"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <Labeled label="Platform name">
+                        <input
+                          type="text"
+                          value={platform.name}
+                          onChange={(e) => patchPlatform(platform.id, { name: e.target.value })}
+                          placeholder="bKash"
+                          aria-label={`Name for platform ${platform.name || "unnamed"}`}
+                          className={inputClass}
+                        />
+                      </Labeled>
+
+                      <div>
+                        <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                          Numbers it sends from
+                        </span>
+                        <div className="space-y-2">
+                          {platform.numbers.map((number, index) => (
+                            <div key={index} className="flex gap-2">
+                              <input
+                                type="text"
+                                value={number}
+                                onChange={(e) => patchPlatformNumber(platform.id, index, e.target.value)}
+                                placeholder="bKash or 1712345678"
+                                aria-label={`Number ${index + 1} for ${platform.name || "platform"}`}
+                                className={inputClass}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => patchPlatform(platform.id, { numbers: platform.numbers.filter((_, i) => i !== index) })}
+                                disabled={platform.numbers.length <= 1}
+                                aria-label={`Remove number ${index + 1}`}
+                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-black/10 text-gray-600 transition hover:bg-gray-50 disabled:opacity-40 dark:border-white/15 dark:text-gray-300 dark:hover:bg-white/5"
+                              >
+                                <X className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => patchPlatform(platform.id, { numbers: [...platform.numbers, ""] })}
+                          className="mt-2 inline-flex min-h-[2.5rem] items-center gap-1.5 text-xs font-medium text-blue-600 underline-offset-4 hover:underline dark:text-blue-400"
+                        >
+                          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                          Add another number
+                        </button>
+                        <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
+                          A number matches in any format, so 1712345678 catches +8801712345678. A
+                          name like bKash matches case-insensitively. Only these senders are ever read.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      <label className="flex cursor-pointer items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={platform.enabled}
+                          onChange={(e) => patchPlatform(platform.id, { enabled: e.target.checked })}
+                          aria-label={`Watch ${platform.name || "this platform"}`}
+                          className="h-4 w-4"
+                        />
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">On</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => removePlatform(platform.id)}
+                        aria-label={`Delete ${platform.name || "platform"}`}
+                        className="flex h-11 w-11 items-center justify-center rounded-lg border border-black/10 text-red-600 transition hover:bg-red-50 dark:border-white/15 dark:text-red-400 dark:hover:bg-red-950/30"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Rules</h2>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={addRule}
+              className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-lg bg-blue-600 px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Add rule
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const fresh = resetRules();
+                setLoaded({ rules: fresh, platforms });
+                setSelectedId(fresh[0]?.id ?? "");
+                flash(true);
+              }}
+              className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-lg border border-black/10 px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-white/15 dark:text-gray-300 dark:hover:bg-white/5"
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              Restore defaults
+            </button>
+          </div>
         </div>
 
         <ul className="mt-4 space-y-2" role="tablist" aria-label="Rules">
@@ -162,7 +327,8 @@ export default function SmsRules() {
                       {rule.label}
                     </span>
                     <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
-                      {rule.sender || "manual only"} · {rule.direction} · {rule.defaultCurrency}
+                      {platforms.find((p) => p.id === rule.platformId)?.name ?? "no platform"} ·{" "}
+                      {rule.direction} · {rule.defaultCurrency}
                     </span>
                   </span>
                 </button>
@@ -182,14 +348,26 @@ export default function SmsRules() {
                   className={inputClass}
                 />
               </Labeled>
-              <Labeled label="Sender address or name">
-                <input
-                  type="text"
-                  value={selected.sender}
-                  onChange={(e) => patch(selected.id, { sender: e.target.value })}
-                  placeholder="bKash"
+              <Labeled label="Platform">
+                <select
+                  value={selected.platformId}
+                  onChange={(e) => patch(selected.id, { platformId: e.target.value })}
+                  aria-label="Platform this rule reads messages from"
                   className={inputClass}
-                />
+                >
+                  <option value="">Not connected — manual paste only</option>
+                  {platforms.map((platform) => (
+                    <option key={platform.id} value={platform.id} disabled={!platform.enabled}>
+                      {platform.name || "Unnamed platform"}
+                      {platform.enabled ? "" : " (off)"}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
+                  {selectedPlatform
+                    ? `Reads messages from ${selectedPlatform.numbers.join(", ") || "no numbers yet"}.`
+                    : "Without a platform this rule is never matched against your inbox."}
+                </p>
               </Labeled>
               <Labeled label="Direction">
                 <select

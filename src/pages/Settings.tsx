@@ -26,7 +26,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { configureSmsCapture, isSmsImportSupported } from "../services/smsService";
-import { activeSenders, loadAutoCapture, loadRules, saveAutoCapture } from "../lib/smsRules";
+import { activeSenders, loadAutoCapture, loadRulesWithPlatforms, saveAutoCapture } from "../lib/smsRules";
 
 const paletteOptions: { key: ColorPalette; label: string; color: string }[] = [
   { key: "amethyst", label: "Amethyst", color: "#8b5cf6" },
@@ -423,7 +423,8 @@ export default function Settings() {
                   onChange={(e) => {
                     setAutoCapture(e.target.checked);
                     saveAutoCapture(e.target.checked);
-                    void configureSmsCapture(activeSenders(loadRules()), e.target.checked);
+                    const { rules, platforms } = loadRulesWithPlatforms();
+                    void configureSmsCapture(activeSenders(rules, platforms), e.target.checked);
                   }}
                   className="mt-0.5 h-5 w-5 shrink-0"
                 />

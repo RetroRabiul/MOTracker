@@ -25,7 +25,7 @@ import {
   hasSmsPermission,
   isSmsImportSupported,
 } from "./services/smsService";
-import { activeSenders, loadAutoCapture, loadRules } from "./lib/smsRules";
+import { activeSenders, loadAutoCapture, loadRulesWithPlatforms } from "./lib/smsRules";
 
 /** Keeps the Android status bar icons legible against the current theme. */
 function NativeThemeSync() {
@@ -45,7 +45,8 @@ function SmsCaptureSync() {
   useEffect(() => {
     if (!isSmsImportSupported()) return;
     void hasSmsPermission().then((granted) => {
-      void configureSmsCapture(activeSenders(loadRules()), granted && loadAutoCapture());
+      const { rules, platforms } = loadRulesWithPlatforms();
+      void configureSmsCapture(activeSenders(rules, platforms), granted && loadAutoCapture());
     });
   }, []);
   return null;
