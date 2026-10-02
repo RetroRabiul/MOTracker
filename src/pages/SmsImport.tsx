@@ -28,6 +28,7 @@ import {
   applyRules,
   candidateFingerprint,
   confidenceBand,
+  isAutoImportable,
   mergeCandidates,
   senderMatches,
   toIsoDate,
@@ -184,13 +185,11 @@ export default function SmsImport() {
    */
   const markImported = useCallback((candidate: ParsedCandidate) => {
     if (!candidate.platformId) return;
-    if (!rememberImport(candidate.platformId, candidate.receivedAt)) return;
-    setImportTimes(loadImportTimes());
+    rememberImport(candidate.platformId, candidate.receivedAt);
   }, []);
   const [scanNote, setScanNote] = useState<string | null>(null);
   /** Per-platform outcome of the last scan, shown under the Scan button. */
   const [report, setReport] = useState<PlatformReport[]>([]);
-  const [importTimes, setImportTimes] = useState<Record<string, number>>(() => loadImportTimes());
   const [error, setError] = useState("");
   const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -235,6 +234,64 @@ export default function SmsImport() {
   );
 
   /**
+   * Saves one candidate and records it as handled. The manual buttons and the
+   * automatic pass share this so a message is never half-imported: the row, the
+   * seen id and the queue removal either all happen or the candidate stays on
+   * screen for another attempt. Splitting them is how a retry duplicates money.
+   */
+  const commitCandidate = useCallback(
+    async (candidate: ParsedCandidate) => {
+      if (!user) return false;
+      if (candidate.problem || candidate.amount <= 0) return false;
+      await createTransaction({
+        userId: user.id,
+        type: candidate.type,
+        amount: candidate.amount,
+        currency: candidate.currency || defaultCurrency,
+        date: candidate.date || toIsoDate(candidate.receivedAt),
+        category: candidate.category,
+        description: candidate.merchant || `${candidate.ruleLabel} via SMS`,
+      });
+      rememberSeenIds([candidate.messageId]);
+      void resolvePendingSms([candidate.messageId]);
+      markImported(candidate);
+      return true;
+    },
+    [defaultCurrency, markImported, user],
+  );
+
+  /**
+   * Imports the messages the parser is sure about without waiting for a tap and
+   * leaves the rest for review. Anything that throws is deliberately left on
+   * screen: a failed save should surface as a row the user can retry, not as a
+   * message that quietly vanished because the network was down.
+   */
+  const autoAdd = useCallback(
+    async (parsed: ParsedCandidate[]) => {
+      if (!user || parsed.length === 0) return 0;
+      const confident = parsed.filter(isAutoImportable);
+      if (confident.length === 0) return 0;
+      const committed: string[] = [];
+      for (const candidate of confident) {
+        try {
+          if (await commitCandidate(candidate)) committed.push(candidateFingerprint(candidate));
+        } catch {
+          // Keep it in the review list.
+        }
+      }
+      if (committed.length > 0) {
+        setSkipped((prev) => {
+          const next = new Set(prev);
+          for (const fingerprint of committed) next.add(fingerprint);
+          return next;
+        });
+      }
+      return committed.length;
+    },
+    [commitCandidate, user],
+  );
+
+  /**
    * Loads anything the receiver captured while the app was closed, and re-loads
    * it when a new message arrives while the app is open.
    */
@@ -250,7 +307,11 @@ export default function SmsImport() {
       return;
     }
     fold(parsed);
-  }, [fold, platforms, rules]);
+    const added = await autoAdd(parsed);
+    if (added > 0) {
+      setToast({ message: `Added ${added} to Transactions automatically`, tone: "success" });
+    }
+  }, [autoAdd, fold, platforms, rules]);
 
   useEffect(() => {
     if (!supported) return;
@@ -289,14 +350,19 @@ export default function SmsImport() {
       const fresh = messages.filter((m) => !seen.has(m.id));
       const parsed = applyRules(fresh, rules, platforms);
       fold(parsed);
-      setReport(buildReport(messages, fresh, parsed, platforms, importTimes));
-
-      } catch (err) {
+      // Auto-import before the report so the per-platform "last added" column
+      // reflects what was just written rather than the previous run.
+      const added = await autoAdd(parsed);
+      setReport(buildReport(messages, fresh, parsed, platforms, loadImportTimes()));
+      if (added > 0) {
+        setToast({ message: `Added ${added} to Transactions automatically`, tone: "success" });
+      }
+    } catch (err) {
       setError(err instanceof Error ? err.message : "Could not read the SMS inbox");
     } finally {
       setScanning(false);
     }
-  }, [days, fold, importTimes, platforms, rules, senders]);
+  }, [autoAdd, days, fold, platforms, rules, senders]);
 
   const visible = useMemo(
     () => candidates.filter((c) => !skipped.has(candidateFingerprint(c))),
@@ -312,22 +378,9 @@ export default function SmsImport() {
 
   const approve = useCallback(
     async (candidate: ParsedCandidate) => {
-      if (!user) return;
-      if (candidate.problem || candidate.amount <= 0) return;
       setSaving(true);
       try {
-        await createTransaction({
-          userId: user.id,
-          type: candidate.type,
-          amount: candidate.amount,
-          currency: candidate.currency || defaultCurrency,
-          date: candidate.date || toIsoDate(candidate.receivedAt),
-          category: candidate.category,
-          description: candidate.merchant || `${candidate.ruleLabel} via SMS`,
-        });
-        rememberSeenIds([candidate.messageId]);
-        void resolvePendingSms([candidate.messageId]);
-        markImported(candidate);
+        if (!(await commitCandidate(candidate))) return;
         setSkipped((prev) => new Set(prev).add(candidateFingerprint(candidate)));
         setToast({ message: `Added ${formatCurrency(candidate.amount, candidate.currency)}`, tone: "success" });
       } catch (err) {
@@ -336,46 +389,35 @@ export default function SmsImport() {
         setSaving(false);
       }
     },
-    [defaultCurrency, user],
+    [commitCandidate],
   );
 
   const approveAll = useCallback(async () => {
     const importable = visible.filter((c) => !c.problem && c.amount > 0);
     if (importable.length === 0) return;
     setSaving(true);
-    let ok = 0;
-    const failed: string[] = [];
+    const committed: string[] = [];
+    let failed = 0;
     for (const candidate of importable) {
       try {
-        await createTransaction({
-          userId: user?.id ?? "",
-          type: candidate.type,
-          amount: candidate.amount,
-          currency: candidate.currency || defaultCurrency,
-          date: candidate.date || toIsoDate(candidate.receivedAt),
-          category: candidate.category,
-          description: candidate.merchant || `${candidate.ruleLabel} via SMS`,
-        });
-        rememberSeenIds([candidate.messageId]);
-        void resolvePendingSms([candidate.messageId]);
-        markImported(candidate);
-        ok++;
-      } catch (err) {
-        failed.push(err instanceof Error ? err.message : "unknown error");
+        if (await commitCandidate(candidate)) committed.push(candidateFingerprint(candidate));
+      } catch {
+        failed++;
       }
     }
+    // Only rows that were actually saved leave the screen; a failed one stays put.
     setSkipped((prev) => {
       const next = new Set(prev);
-      for (const c of importable) next.add(candidateFingerprint(c));
+      for (const fingerprint of committed) next.add(fingerprint);
       return next;
     });
     setSaving(false);
     setToast(
-      failed.length === 0
-        ? { message: `Imported ${ok} transaction(s)`, tone: "success" }
-        : { message: `Imported ${ok}, ${failed.length} failed`, tone: "error" },
+      failed === 0
+        ? { message: `Imported ${committed.length} transaction(s)`, tone: "success" }
+        : { message: `Imported ${committed.length}, ${failed} failed`, tone: "error" },
     );
-  }, [defaultCurrency, user, visible]);
+  }, [commitCandidate, visible]);
 
   const header = (
     <div className="sticky top-0 z-20 border-b border-black/5 bg-white/80 pt-safe backdrop-blur-md dark:border-white/10 dark:bg-gray-900/80">
@@ -476,6 +518,11 @@ export default function SmsImport() {
               {scanNote && (
                 <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">{scanNote}</p>
               )}
+
+              <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
+                Messages the parser reads with high confidence are added to your transactions
+                straight away. Anything less certain waits here so you can check it.
+              </p>
 
               {report.length > 0 && (
                 <ul className="mt-3 space-y-1.5">
@@ -582,7 +629,6 @@ export default function SmsImport() {
         onConfirm={() => {
           clearSeenIds();
           clearImportTimes();
-          setImportTimes({});
           setReport([]);
           setCandidateList([]);
           setSkipped(new Set());

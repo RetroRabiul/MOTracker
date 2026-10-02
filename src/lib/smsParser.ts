@@ -628,3 +628,16 @@ export function confidenceBand(confidence: number): ConfidenceBand {
   if (confidence >= 0.6) return "medium";
   return "low";
 }
+
+/**
+ * True when a candidate is certain enough to save without asking. It has to sit
+ * in the same file as the scoring it trusts: if the threshold moved apart from
+ * `confidenceBand` the two would disagree and messages would be imported at a
+ * confidence the UI never showed.
+ */
+export function isAutoImportable(candidate: ParsedCandidate): boolean {
+  if (candidate.problem) return false;
+  // NaN fails this test rather than slipping through as a truthy amount.
+  if (!(candidate.amount > 0)) return false;
+  return confidenceBand(candidate.confidence) === "high";
+}
