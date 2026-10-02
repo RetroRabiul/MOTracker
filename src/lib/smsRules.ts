@@ -196,15 +196,65 @@ export function loadRulesWithPlatforms(): { rules: SmsRule[]; platforms: SmsPlat
   // than an empty list with no obvious way forward.
   const platforms = storedPlatforms.length > 0 ? storedPlatforms : STARTER_PLATFORMS.map((p) => ({ ...p }));
 
-  const rules = loadRules();
-  const { platforms: migrated, migrated: count } = platformsFromLegacySenders(rules, platforms);
-  const touched = rules.map((r) => ({ ...r, sender: "" }));
+  const stored = refreshStarterPatterns(loadRules());
+  const { platforms: migrated, migrated: count } = platformsFromLegacySenders(stored, platforms);
+  const touched = stored.map((r) => ({ ...r, sender: "" }));
 
-  if (count > 0 || storedPlatforms.length === 0) {
+  if (count > 0 || storedPlatforms.length === 0 || touched.some((r, i) => r !== stored[i])) {
     savePlatforms(migrated);
     saveRules(touched);
   }
   return { rules: touched, platforms: migrated };
+}
+
+/**
+ * Every starter pattern this app has ever shipped, keyed by rule id.
+ *
+ * Stored rules are only replaced when the pattern is one of these, byte for
+ * byte. Recognising a previous version by its amount group alone was tried
+ * first and was wrong: a pattern the user wrote could carry the same group and
+ * would have been overwritten without trace.
+ */
+const SUPERSEDED_PATTERNS: Record<string, string[]> = {
+  "bkash-sent": [
+    "(?:you have sent|you sent|sent)[\\s\u09f3]*(?:tk|taka)?[\\s\u09f3]*(?<amount>[\\d,.]+)\\s*(?:tk|taka|\u09f3)?[^.]{0,40}?\\bto\\b\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
+    "(?:you have )?(?:sent|send|sending)[\\s\u09f3]*(?:tk|taka)?[\\s\u09f3]*(?<amount>[\\d,.]*\\d)\\s*(?:tk|taka|\u09f3)?[^.]{0,40}?\\bto\\b\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
+  ],
+  "bkash-received": [
+    "(?:you have received|you received|received)[\\s\u09f3]*(?:tk|taka)?[\\s\u09f3]*(?<amount>[\\d,.]+)\\s*(?:tk|taka|\u09f3)?[^.]{0,40}?\\bfrom\\b\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
+    "(?:you have )?(?:received|receive|receiving)[\\s\u09f3]*(?:tk|taka)?[\\s\u09f3]*(?<amount>[\\d,.]*\\d)\\s*(?:tk|taka|\u09f3)?[^.]{0,30}?\\bfrom\\b\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
+  ],
+  "bkash-cashout": [
+    "cash\\s*out[^.]{0,60}?(?<amount>[\\d,.]+)[^.]{0,40}?(?:from\\s+)?(?:agent|point)\\s*[:\\-]?\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
+    "cash\\s*out[^.]{0,60}?(?<amount>[\\d,.]*\\d)(?:[^.]{0,40}?(?:from\\s+)?(?:agent|point)\\s*[:\\-]?\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60}))?",
+  ],
+  "bank-debit": [
+    "(?:debit|dr|withdrawn|withdrawal|paid|purchase|pos)\\b[^0-9]{0,40}(?<amount>[\\d,.]+)\\s*(?:pkr|bdt|usd|inr|rs|tk|\u09f3)?[^.]{0,30}?(?:to\\s+)?(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
+    "(?:debit|dr|withdrawn|withdrawal|paid|payment|payments|purchase|pos)\\b[^0-9]{0,40}(?<amount>[\\d,.]*\\d)\\s*(?:pkr|bdt|usd|inr|rs|tk|\u09f3)?(?:[^.]{0,30}?(?:\\bto\\b)\\s+(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60}))?",
+  ],
+  "bank-credit": [
+    "(?:credit|cr|received|salary|refund)\\b[^0-9]{0,40}(?<amount>[\\d,.]+)\\s*(?:pkr|bdt|usd|inr|rs|tk|\u09f3)?[^.]{0,30}?(?:from\\s+)?(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
+    "(?:credit|cr|received|salary|refund)\\b[^0-9]{0,40}(?<amount>[\\d,.]*\\d)\\s*(?:pkr|bdt|usd|inr|rs|tk|\u09f3)?(?:[^.]{0,30}?(?:\\bfrom\\b)\\s+(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60}))?",
+  ],
+};
+
+/**
+ * Brings a stored starter rule's pattern up to date with the shipped one.
+ *
+ * Starter rules are persisted on first run, so from then on the phone runs
+ * whatever pattern it saved rather than the one in this file. That went
+ * unnoticed until a real device kept reporting Tk 500.00 as 50000: the greedy
+ * amount group had been fixed several commits earlier and the fix never
+ * travelled, because nothing pushed it out to installs that already had the
+ * rule saved.
+ */
+function refreshStarterPatterns(rules: SmsRule[]): SmsRule[] {
+  return rules.map((rule) => {
+    const starter = STARTER_RULES.find((r) => r.id === rule.id);
+    if (!starter || rule.pattern === starter.pattern) return rule;
+    if (!SUPERSEDED_PATTERNS[rule.id]?.includes(rule.pattern)) return rule;
+    return { ...rule, pattern: starter.pattern };
+  });
 }
 
 export function saveRules(rules: SmsRule[]): boolean {
