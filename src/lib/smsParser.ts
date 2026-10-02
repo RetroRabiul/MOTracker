@@ -520,6 +520,60 @@ export function applyRules(messages: SmsMessage[], rules: SmsRule[]): ParsedCand
   return out;
 }
 
+/**
+ * Identity of the underlying SMS, independent of which path delivered it.
+ *
+ * A broadcast carries no provider row id, so captured messages are tagged with
+ * a synthetic one while the same message read from the inbox query keeps the
+ * provider id. The two ids never agree, so anything that has to recognise "the
+ * same SMS twice" keys off this instead. Whitespace is collapsed and case
+ * folded because a broadcast and an inbox row should differ only in id.
+ */
+export function messageFingerprint(input: { address: string; body: string; date: number }): string {
+  const address = input.address.replace(/[^\dA-Za-z]/g, "").toLowerCase();
+  const body = input.body.replace(/\s+/g, " ").trim().toLowerCase();
+  return `${address}|${input.date}|${body}`;
+}
+
+/** Fingerprint of a parsed candidate, for comparing against other candidates. */
+export function candidateFingerprint(candidate: ParsedCandidate): string {
+  return messageFingerprint({
+    address: candidate.address,
+    body: candidate.rawBody,
+    date: candidate.receivedAt,
+  });
+}
+
+/**
+ * Folds new candidates into an existing list, keeping one row per real SMS.
+ *
+ * The list is shared between the receiver queue and the inbox scan, so the same
+ * message can be offered twice under two different ids. Ids that lose are
+ * returned so the caller can mark them handled, which is what stops the losing
+ * copy from being imported a second time.
+ */
+export function mergeCandidates(
+  existing: ParsedCandidate[],
+  incoming: ParsedCandidate[],
+): { merged: ParsedCandidate[]; foldedIds: string[] } {
+  const merged = [...existing];
+  const knownIds = new Set(existing.map((c) => c.messageId));
+  const knownPrints = new Set(existing.map(candidateFingerprint));
+  const foldedIds: string[] = [];
+
+  for (const candidate of incoming) {
+    if (knownIds.has(candidate.messageId) || knownPrints.has(candidateFingerprint(candidate))) {
+      foldedIds.push(candidate.messageId);
+      continue;
+    }
+    merged.push(candidate);
+    knownIds.add(candidate.messageId);
+    knownPrints.add(candidateFingerprint(candidate));
+  }
+
+  return { merged, foldedIds };
+}
+
 export function senderMatches(address: string, sender: string): boolean {
   const needle = normaliseBody(sender).replace(/[^\dA-Za-z]/g, "").toLowerCase();
   if (!needle) return false;

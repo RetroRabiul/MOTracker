@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -26,7 +26,9 @@ import {
 } from "../services/smsService";
 import {
   applyRules,
+  candidateFingerprint,
   confidenceBand,
+  mergeCandidates,
   toIsoDate,
   type ParsedCandidate,
   type SmsMessage,
@@ -65,7 +67,28 @@ export default function SmsImport() {
   const [saving, setSaving] = useState(false);
   const [days, setDays] = useState<Window_>(30);
   const [candidates, setCandidates] = useState<ParsedCandidate[]>([]);
+  /**
+   * Dismissed messages, keyed by fingerprint rather than id: the same SMS can
+   * carry two ids, and a dismissal has to hide whichever copy turns up next.
+   */
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
+  /**
+   * Mirrors `candidates` so merging never depends on render state. Without this
+   * the merge helper would capture the list, which changes identity on every
+   * edit and would drag the pending-message effect down with it, re-subscribing
+   * the receiver listener each time.
+   */
+  const candidatesRef = useRef<ParsedCandidate[]>([]);
+
+  /** Single writer, so the ref and the rendered list cannot drift apart. */
+  const setCandidateList = useCallback(
+    (next: ParsedCandidate[] | ((prev: ParsedCandidate[]) => ParsedCandidate[])) => {
+      const resolved = typeof next === "function" ? next(candidatesRef.current) : next;
+      candidatesRef.current = resolved;
+      setCandidates(resolved);
+    },
+    [],
+  );
   const [scanNote, setScanNote] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
@@ -93,6 +116,24 @@ export default function SmsImport() {
   }, [senders, supported]);
 
   /**
+   * Adds candidates without disturbing what is already on screen. The list is
+   * fed by both the receiver queue and the inbox scan, so the same SMS can
+   * arrive twice under two ids; `mergeCandidates` keeps one row and reports the
+   * id that lost, which is recorded as handled so it cannot be imported twice.
+   */
+  const fold = useCallback(
+    (incoming: ParsedCandidate[]) => {
+      if (incoming.length === 0) return;
+      setCandidateList((prev) => {
+        const { merged, foldedIds } = mergeCandidates(prev, incoming);
+        if (foldedIds.length > 0) rememberSeenIds(foldedIds);
+        return merged;
+      });
+    },
+    [setCandidateList],
+  );
+
+  /**
    * Loads anything the receiver captured while the app was closed, and re-loads
    * it when a new message arrives while the app is open.
    */
@@ -107,12 +148,8 @@ export default function SmsImport() {
       setScanNote("A new message arrived, but no rule matched it. Check the rules screen.");
       return;
     }
-    setCandidates((prev) => {
-      const known = new Set(prev.map((c) => c.messageId));
-      return [...parsed.filter((c) => !known.has(c.messageId)), ...prev];
-    });
-    setSkipped(new Set());
-  }, [rules]);
+    fold(parsed);
+  }, [fold, rules]);
 
   useEffect(() => {
     if (!supported) return;
@@ -149,8 +186,7 @@ export default function SmsImport() {
       const seen = loadSeenIds();
       const fresh = messages.filter((m) => !seen.has(m.id));
       const parsed = applyRules(fresh, rules);
-      setCandidates(parsed);
-      setSkipped(new Set());
+      fold(parsed);
 
       if (messages.length === 0) {
         setScanNote(`No messages from ${senders.join(", ")} in the last ${days} days.`);
@@ -166,16 +202,19 @@ export default function SmsImport() {
     } finally {
       setScanning(false);
     }
-  }, [days, rules, senders]);
+  }, [days, fold, rules, senders]);
 
   const visible = useMemo(
-    () => candidates.filter((c) => !skipped.has(c.messageId)),
+    () => candidates.filter((c) => !skipped.has(candidateFingerprint(c))),
     [candidates, skipped],
   );
 
-  const updateCandidate = useCallback((id: string, patch: Partial<ParsedCandidate>) => {
-    setCandidates((prev) => prev.map((c) => (c.messageId === id ? { ...c, ...patch } : c)));
-  }, []);
+  const updateCandidate = useCallback(
+    (id: string, patch: Partial<ParsedCandidate>) => {
+      setCandidateList((prev) => prev.map((c) => (c.messageId === id ? { ...c, ...patch } : c)));
+    },
+    [setCandidateList],
+  );
 
   const approve = useCallback(
     async (candidate: ParsedCandidate) => {
@@ -194,7 +233,7 @@ export default function SmsImport() {
         });
         rememberSeenIds([candidate.messageId]);
         void resolvePendingSms([candidate.messageId]);
-        setSkipped((prev) => new Set(prev).add(candidate.messageId));
+        setSkipped((prev) => new Set(prev).add(candidateFingerprint(candidate)));
         setToast({ message: `Added ${formatCurrency(candidate.amount, candidate.currency)}`, tone: "success" });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not save the transaction");
@@ -231,7 +270,7 @@ export default function SmsImport() {
     }
     setSkipped((prev) => {
       const next = new Set(prev);
-      for (const c of importable) next.add(c.messageId);
+      for (const c of importable) next.add(candidateFingerprint(c));
       return next;
     });
     setSaving(false);
@@ -378,7 +417,7 @@ export default function SmsImport() {
                       onSkip={() => {
                         rememberSeenIds([candidate.messageId]);
                         void resolvePendingSms([candidate.messageId]);
-                        setSkipped((prev) => new Set(prev).add(candidate.messageId));
+                        setSkipped((prev) => new Set(prev).add(candidateFingerprint(candidate)));
                       }}
                     />
                   ))}
@@ -419,7 +458,7 @@ export default function SmsImport() {
         onCancel={() => setConfirmReset(false)}
         onConfirm={() => {
           clearSeenIds();
-          setCandidates([]);
+          setCandidateList([]);
           setSkipped(new Set());
           setConfirmReset(false);
           setToast({ message: "Cleared the imported list", tone: "success" });
