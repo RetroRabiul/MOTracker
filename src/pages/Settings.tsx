@@ -26,7 +26,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { configureSmsCapture, isSmsImportSupported } from "../services/smsService";
-import { activeSenders, loadAutoCapture, loadRulesWithPlatforms, saveAutoCapture } from "../lib/smsRules";
+import { activeSenders, loadAutoCapture, loadAutoImport, loadRulesWithPlatforms, saveAutoCapture, saveAutoImport } from "../lib/smsRules";
 
 const paletteOptions: { key: ColorPalette; label: string; color: string }[] = [
   { key: "amethyst", label: "Amethyst", color: "#8b5cf6" },
@@ -44,6 +44,7 @@ export default function Settings() {
   const [exporting, setExporting] = useState<string | null>(null);
   const [toast, setToast] = useState<{ tone: ToastTone; message: string } | null>(null);
   const [autoCapture, setAutoCapture] = useState<boolean>(() => loadAutoCapture());
+  const [autoImport, setAutoImport] = useState<boolean>(() => loadAutoImport());
 
   const handleExport = async (format: "csv" | "excel" | "pdf") => {
     if (!user) return;
@@ -433,8 +434,31 @@ export default function Settings() {
                     Watch for new messages
                   </span>
                   <span className={`mt-0.5 block text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
-                    Picks up alerts from your saved senders while the app is closed. They are queued for
-                    you to review, never added automatically, and only matching senders are stored.
+                    Picks up alerts from your saved senders while the app is closed. Only matching senders
+                    are stored. Turn this off to stop new alerts being picked up at all.
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            <div className="mt-4 border-t border-black/5 pt-4 dark:border-white/10">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={autoImport}
+                  onChange={(e) => {
+                    setAutoImport(e.target.checked);
+                    saveAutoImport(e.target.checked);
+                  }}
+                  className="mt-0.5 h-5 w-5 shrink-0"
+                />
+                <span className="min-w-0">
+                  <span className={`block text-sm font-semibold ${darkMode ? "text-white" : "text-gray-900"}`}>
+                    Add clear messages without asking
+                  </span>
+                  <span className={`mt-0.5 block text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                    Messages read with high confidence go straight into your transactions. Anything less certain
+                    always waits for review. Turn this off to check every message yourself.
                   </span>
                 </span>
               </label>

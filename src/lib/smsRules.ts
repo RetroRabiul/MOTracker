@@ -4,6 +4,7 @@ import { loadPlatforms, platformsFromLegacySenders, savePlatforms, type SmsPlatf
 const RULES_KEY = "sms_import_rules_v1";
 const SEEN_KEY = "sms_import_seen_v1";
 const AUTO_CAPTURE_KEY = "sms_import_auto_capture_v1";
+const AUTO_IMPORT_KEY = "sms_import_auto_import_v1";
 
 /**
  * Whether the native receiver should watch for new messages from configured
@@ -25,6 +26,36 @@ export function loadAutoCapture(): boolean {
 export function saveAutoCapture(enabled: boolean): boolean {
   try {
     localStorage.setItem(AUTO_CAPTURE_KEY, enabled ? "1" : "0");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether messages the parser is confident about are written to Transactions on
+ * arrival, without waiting to be read.
+ *
+ * Deliberately separate from auto-capture. Turning this off does not stop
+ * anything being captured: messages keep arriving and keep queuing, they just
+ * wait on the review screen instead of appearing on their own. Someone who wants
+ * to see every row before it counts should reach for this rather than switching
+ * capture off and losing the messages entirely.
+ *
+ * Defaults to on, matching `isAutoImportable`.
+ */
+export function loadAutoImport(): boolean {
+  try {
+    const raw = localStorage.getItem(AUTO_IMPORT_KEY);
+    return raw === null ? true : raw === "1";
+  } catch {
+    return true;
+  }
+}
+
+export function saveAutoImport(enabled: boolean): boolean {
+  try {
+    localStorage.setItem(AUTO_IMPORT_KEY, enabled ? "1" : "0");
     return true;
   } catch {
     return false;

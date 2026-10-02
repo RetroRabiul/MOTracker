@@ -39,6 +39,7 @@ import {
   activeSenders,
   clearSeenIds,
   loadAutoCapture,
+    loadAutoImport,
   loadRulesWithPlatforms,
   loadSeenIds,
   rememberSeenIds,
@@ -269,6 +270,7 @@ export default function SmsImport() {
   const autoAdd = useCallback(
     async (parsed: ParsedCandidate[]) => {
       if (!user || parsed.length === 0) return 0;
+      if (!loadAutoImport()) return 0;
       const confident = parsed.filter(isAutoImportable);
       if (confident.length === 0) return 0;
       const committed: string[] = [];
@@ -520,8 +522,9 @@ export default function SmsImport() {
               )}
 
               <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
-                Messages the parser reads with high confidence are added to your transactions
-                straight away. Anything less certain waits here so you can check it.
+                {loadAutoImport()
+                  ? "Messages the parser reads with high confidence are added to your transactions straight away. Anything less certain waits here so you can check it."
+                  : "Every message waits here for you to check before it is added to your transactions."}
               </p>
 
               {report.length > 0 && (
