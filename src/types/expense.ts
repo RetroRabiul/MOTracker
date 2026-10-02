@@ -1,4 +1,9 @@
-export type TransactionType = "income" | "expense";
+/**
+ * `transfer` is money moving between accounts the user owns. It is deliberately
+ * not an expense: totalling it as spending made a bank top-up look like a large
+ * purchase, which quietly distorted every figure in the app.
+ */
+export type TransactionType = "income" | "expense" | "transfer";
 
 export interface Transaction {
   id: string;
@@ -35,6 +40,13 @@ export type IncomeCategory =
   | "Rental Income"
   | "Other";
 
+export type TransferCategory =
+  | "Bank Transfer"
+  | "Wallet Transfer"
+  | "Savings"
+  | "Loan"
+  | "Other";
+
 export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
   "Travel",
   "Food",
@@ -58,6 +70,14 @@ export const INCOME_CATEGORIES: IncomeCategory[] = [
   "Other",
 ];
 
+export const TRANSFER_CATEGORIES: TransferCategory[] = [
+  "Bank Transfer",
+  "Wallet Transfer",
+  "Savings",
+  "Loan",
+  "Other",
+];
+
 export const CATEGORY_COLORS: Record<string, string> = {
   Travel: "#3b82f6",
   Food: "#ef4444",
@@ -75,6 +95,10 @@ export const CATEGORY_COLORS: Record<string, string> = {
   Salary: "#f97316",
   Freelance: "#eab308",
   "Rental Income": "#d946ef",
+  "Bank Transfer": "#0ea5e9",
+  "Wallet Transfer": "#06b6d4",
+  Savings: "#64748b",
+  Loan: "#f43f5e",
 };
 
 export interface CurrencyOption {

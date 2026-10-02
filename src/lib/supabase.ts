@@ -83,7 +83,11 @@ export async function mapRow(row: TransactionRow): Promise<Transaction> {
   return {
     id: row.id,
     userId: row.user_id,
-    type: row.type === "income" ? "income" : "expense",
+    // The column is text and the client does not trust it, so narrow rather than
+    // cast. Anything unrecognised still falls back to "expense", but a transfer
+    // must survive the round trip: coercing it here would turn every bank top-up
+    // back into a large expense the moment the list was reloaded.
+    type: row.type === "income" || row.type === "transfer" ? row.type : "expense",
     amount: Number(row.amount),
     currency: row.currency,
     date: row.date,

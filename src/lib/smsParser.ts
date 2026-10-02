@@ -13,7 +13,15 @@
 
 import { platformNumbers, type SmsPlatform } from "./smsPlatforms";
 
-export type SmsDirection = "expense" | "income";
+/**
+ * `transfer` is available to a rule but never inferred from wording.
+ *
+ * "You have sent Tk 500" is a transfer when it went to the user's own bank and
+ * an expense when it paid a shop, and the message says the same thing either
+ * way. Guessing would put real purchases into transfers or the reverse, so the
+ * user declares it on the rule instead.
+ */
+export type SmsDirection = "expense" | "income" | "transfer";
 
 export interface SmsRule {
   id: string;

@@ -727,7 +727,7 @@ function CandidateRow({ candidate, darkMode, saving, onChange, onApprove, onSkip
               {candidate.problem ? "—" : formatCurrency(candidate.amount, candidate.currency)}
             </span>
             <span className="shrink-0 text-xs text-gray-500 dark:text-gray-400">
-              {candidate.type === "income" ? "Income" : "Expense"}
+              {candidate.type === "income" ? "Income" : candidate.type === "transfer" ? "Transfer" : "Expense"}
             </span>
           </span>
           <span className="mt-0.5 block truncate text-sm text-gray-600 dark:text-gray-400">

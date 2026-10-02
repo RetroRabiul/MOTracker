@@ -23,6 +23,22 @@ create table if not exists public.transactions (
 );
 
 -- ---------------------------------------------------------------------------
+-- Transfers
+--
+-- Moving money between your own accounts is neither income nor spending, and
+-- counting it as spending inflated every total in the app. `create table if not
+-- exists` above will not widen a check on a table that already exists, so this
+-- has to be its own statement; it is written to be safe to run repeatedly.
+--
+-- Existing rows are left alone. An expense saved as a transfer before this ran
+-- stays an expense, because guessing which of them were transfers is not
+-- something a migration can do honestly.
+-- ---------------------------------------------------------------------------
+alter table public.transactions drop constraint if exists transactions_type_check;
+alter table public.transactions add constraint transactions_type_check
+  check (type in ('income', 'expense', 'transfer'));
+
+-- ---------------------------------------------------------------------------
 -- Row Level Security: users may only ever touch their own rows.
 -- This is the ONLY authorization mechanism - the client never filters by user.
 -- ---------------------------------------------------------------------------

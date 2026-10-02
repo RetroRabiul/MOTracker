@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
+  ArrowLeftRight,
   Calendar,
   Filter,
   Image,
@@ -338,6 +339,7 @@ export default function ExpenseList() {
                     <option value="All">All Types</option>
                     <option value="income">Income</option>
                     <option value="expense">Expense</option>
+                    <option value="transfer">Transfer</option>
                   </select>
                 </div>
                 <div>
@@ -446,11 +448,17 @@ export default function ExpenseList() {
                     <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium text-white ${
-                          transaction.type === "income" ? "bg-emerald-500" : "bg-red-500"
+                          transaction.type === "income"
+                            ? "bg-emerald-500"
+                            : transaction.type === "transfer"
+                              ? "bg-sky-500"
+                              : "bg-red-500"
                         }`}
                       >
                         {transaction.type === "income" ? (
                           <TrendingUp className="mr-1 h-3 w-3" />
+                        ) : transaction.type === "transfer" ? (
+                          <ArrowLeftRight className="mr-1 h-3 w-3" />
                         ) : (
                           <TrendingDown className="mr-1 h-3 w-3" />
                         )}
@@ -491,10 +499,14 @@ export default function ExpenseList() {
                     <div className="flex flex-col items-end gap-0.5">
                       <span
                         className={`text-lg font-bold ${
-                          transaction.type === "income" ? "text-emerald-600" : "text-red-600"
+                          transaction.type === "income"
+                            ? "text-emerald-600"
+                            : transaction.type === "transfer"
+                              ? "text-sky-600"
+                              : "text-red-600"
                         }`}
                       >
-                        {transaction.type === "income" ? "+" : "-"}
+                        {transaction.type === "income" ? "+" : transaction.type === "transfer" ? "" : "-"}
                         {converted
                           ? formatCurrency(converted.amount, defaultCurrency)
                           : formatCurrency(transaction.amount, transaction.currency)}

@@ -389,8 +389,9 @@ export default function SmsRules() {
                   onChange={(e) => patch(selected.id, { direction: e.target.value as SmsDirection })}
                   className={inputClass}
                 >
-                  <option value="expense">Expense (money out)</option>
+<option value="expense">Expense (money out)</option>
                   <option value="income">Income (money in)</option>
+                  <option value="transfer">Transfer (between your own accounts)</option>
                 </select>
               </Labeled>
               <Labeled label="Currency">
@@ -468,7 +469,11 @@ export default function SmsRules() {
                   {preview.candidate && !preview.candidate.problem && (
                     <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
                       <p className="font-semibold">
-                        {preview.candidate.type === "income" ? "Income" : "Expense"} ·{" "}
+                        {preview.candidate.type === "income"
+                          ? "Income"
+                          : preview.candidate.type === "transfer"
+                            ? "Transfer"
+                            : "Expense"} ·{" "}
                         {preview.candidate.amount} {preview.candidate.currency} ·{" "}
                         {preview.candidate.date}
                       </p>

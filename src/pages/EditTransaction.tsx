@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEv
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
+  ArrowLeftRight,
   Calendar,
   Camera,
   CheckCircle,
@@ -17,7 +18,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useSettings } from "../context/SettingsContext";
 import { getTransactionById, updateTransaction } from "../services/transactionService";
-import { CURRENCIES, EXPENSE_CATEGORIES, INCOME_CATEGORIES, getCurrencySymbol } from "../types/expense";
+import { CURRENCIES, EXPENSE_CATEGORIES, INCOME_CATEGORIES, TRANSFER_CATEGORIES, getCurrencySymbol, type TransactionType } from "../types/expense";
 
 const EXPENSE_CHIPS: { label: string; icon: string }[] = [
   { label: "Travel", icon: "✈️" },
@@ -42,6 +43,14 @@ const INCOME_CHIPS: { label: string; icon: string }[] = [
   { label: "Other", icon: "📦" },
 ];
 
+const TRANSFER_CHIPS: { label: string; icon: string }[] = [
+  { label: "Bank Transfer", icon: "🏦" },
+  { label: "Wallet Transfer", icon: "📱" },
+  { label: "Savings", icon: "🐖" },
+  { label: "Loan", icon: "🤝" },
+  { label: "Other", icon: "📦" },
+];
+
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 
 export default function EditTransaction() {
@@ -53,7 +62,7 @@ export default function EditTransaction() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const [type, setType] = useState<"expense" | "income">("expense");
+  const [type, setType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState(defaultCurrency);
   const [date, setDate] = useState("");
@@ -100,8 +109,9 @@ export default function EditTransaction() {
     void loadTransaction();
   }, [loadTransaction]);
 
-  const chips = type === "expense" ? EXPENSE_CHIPS : INCOME_CHIPS;
-  const categories = type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+  const chips = type === "expense" ? EXPENSE_CHIPS : type === "income" ? INCOME_CHIPS : TRANSFER_CHIPS;
+  const categories =
+    type === "expense" ? EXPENSE_CATEGORIES : type === "income" ? INCOME_CATEGORIES : TRANSFER_CATEGORIES;
 
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -312,6 +322,21 @@ export default function EditTransaction() {
               >
                 <TrendingUp className="h-4 w-4" />
                 Income
+              </button>
+              <button
+                type="button"
+                onClick={() => setType("transfer")}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2.5 text-sm font-semibold transition ${
+                  type === "transfer"
+                    ? "text-white shadow-sm"
+                    : darkMode
+                      ? "text-gray-400 hover:text-white"
+                      : "text-gray-600 hover:text-gray-900"
+                }`}
+                style={type === "transfer" ? { backgroundColor: colors.primary } : {}}
+              >
+                <ArrowLeftRight className="h-4 w-4" />
+                Transfer
               </button>
             </div>
           </div>

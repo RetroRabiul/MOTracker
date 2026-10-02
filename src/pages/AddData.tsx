@@ -2,6 +2,7 @@ import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
+  ArrowLeftRight,
   Calendar,
   Camera,
   CheckCircle,
@@ -17,7 +18,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useSettings } from "../context/SettingsContext";
 import { createTransaction } from "../services/transactionService";
-import { CURRENCIES, EXPENSE_CATEGORIES, INCOME_CATEGORIES, getCurrencySymbol } from "../types/expense";
+import { CURRENCIES, EXPENSE_CATEGORIES, INCOME_CATEGORIES, TRANSFER_CATEGORIES, getCurrencySymbol, type TransactionType } from "../types/expense";
 
 const EXPENSE_CHIPS: { label: string; icon: string }[] = [
   { label: "Travel", icon: "✈️" },
@@ -42,6 +43,20 @@ const INCOME_CHIPS: { label: string; icon: string }[] = [
   { label: "Other", icon: "📦" },
 ];
 
+const TYPE_LABEL: Record<TransactionType, string> = {
+  income: "Income",
+  expense: "Expense",
+  transfer: "Transfer",
+};
+
+const TRANSFER_CHIPS: { label: string; icon: string }[] = [
+  { label: "Bank Transfer", icon: "🏦" },
+  { label: "Wallet Transfer", icon: "📱" },
+  { label: "Savings", icon: "🐖" },
+  { label: "Loan", icon: "🤝" },
+  { label: "Other", icon: "📦" },
+];
+
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 
 export default function AddData() {
@@ -52,7 +67,7 @@ export default function AddData() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const [type, setType] = useState<"expense" | "income">("expense");
+  const [type, setType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState("");
   // Defaults to the user's reporting currency instead of always USD.
   const [currency, setCurrency] = useState(defaultCurrency);
@@ -65,10 +80,11 @@ export default function AddData() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  const chips = type === "expense" ? EXPENSE_CHIPS : INCOME_CHIPS;
-  const categories = type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+  const chips = type === "expense" ? EXPENSE_CHIPS : type === "income" ? INCOME_CHIPS : TRANSFER_CHIPS;
+  const categories =
+    type === "expense" ? EXPENSE_CATEGORIES : type === "income" ? INCOME_CATEGORIES : TRANSFER_CATEGORIES;
 
-  const handleTypeChange = (newType: "expense" | "income") => {
+  const handleTypeChange = (newType: TransactionType) => {
     setType(newType);
     setCategory("Other");
   };
@@ -141,7 +157,7 @@ export default function AddData() {
         <div className="text-center">
           <CheckCircle className="mx-auto h-16 w-16 text-emerald-500" />
           <h2 className={`mt-4 text-2xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>
-            {type === "income" ? "Income" : "Expense"} Added!
+            {TYPE_LABEL[type]} Added!
           </h2>
           <p className={`mt-2 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
             Redirecting to dashboard...
@@ -235,6 +251,21 @@ export default function AddData() {
               >
                 <TrendingUp className="h-4 w-4" />
                 Income
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTypeChange("transfer")}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2.5 text-sm font-semibold transition ${
+                  type === "transfer"
+                    ? "text-white shadow-sm"
+                    : darkMode
+                      ? "text-gray-400 hover:text-white"
+                      : "text-gray-600 hover:text-gray-900"
+                }`}
+                style={type === "transfer" ? { backgroundColor: colors.primary } : {}}
+              >
+                <ArrowLeftRight className="h-4 w-4" />
+                Transfer
               </button>
             </div>
           </div>
@@ -369,7 +400,7 @@ export default function AddData() {
 
           <div className={cardClass} style={cardStyle}>
             <label className={`mb-3 block text-sm font-medium ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-              Receipt Photo {type === "income" ? "(Optional)" : ""}
+              Receipt Photo {type === "expense" ? "" : "(Optional)"}
             </label>
 
             {receiptPreview ? (
@@ -459,7 +490,7 @@ export default function AddData() {
                 ) : (
                   <TrendingUp className="mr-2 h-5 w-5" />
                 )}
-                Save {type === "income" ? "Income" : "Expense"}
+                Save {TYPE_LABEL[type]}
               </>
             )}
           </button>

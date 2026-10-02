@@ -151,12 +151,13 @@ export async function exportToPDF(
   }
 
   const tableData = convertedRows.map(({ transaction: t, amount, converted }) => [
-    t.type === "income" ? "Income" : "Expense",
+    t.type === "income" ? "Income" : t.type === "transfer" ? "Transfer" : "Expense",
     t.date,
     t.category,
-    converted
-      ? `${t.type === "income" ? "+" : "-"}${formatCurrency(amount, defaultCurrency)}`
-      : `${t.type === "income" ? "+" : "-"}${t.amount.toFixed(2)} ${t.currency || "USD"}`,
+    // A transfer is not a direction of flow, so it carries no + or - sign.
+    `${t.type === "income" ? "+" : t.type === "transfer" ? "" : "-"}${
+      converted ? formatCurrency(amount, defaultCurrency) : `${t.amount.toFixed(2)} ${t.currency || "USD"}`
+    }`,
     t.description || "-",
   ]);
 

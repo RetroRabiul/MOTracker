@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  ArrowLeftRight,
   BarChart3,
   List,
   Loader2,
@@ -96,6 +97,8 @@ export default function Dashboard() {
     totalIncome,
     totalExpenses,
     netBalance,
+    transferTotal,
+    transferCount,
     incomeCount,
     expenseCount,
     activeCategories,
@@ -126,10 +129,14 @@ export default function Dashboard() {
 
     const incomeEntries = filtered.filter((t) => t.type === "income");
     const expenseEntries = filtered.filter((t) => t.type === "expense");
+    // Shown, but deliberately outside both the income and expense totals: money
+    // moving between the user's own accounts is neither.
+    const transferEntries = filtered.filter((t) => t.type === "transfer");
 
     const inc = incomeEntries.reduce((s, t) => s + t.amount, 0);
     const exp = expenseEntries.reduce((s, t) => s + t.amount, 0);
-    const cats = new Set(filtered.map((t) => t.category)).size;
+    const moved = transferEntries.reduce((s, t) => s + t.amount, 0);
+    const cats = new Set([...incomeEntries, ...expenseEntries].map((t) => t.category)).size;
 
     let chart: ChartPoint[] = [];
 
@@ -170,6 +177,8 @@ export default function Dashboard() {
       totalIncome: inc,
       totalExpenses: exp,
       netBalance: inc - exp,
+      transferTotal: moved,
+      transferCount: transferEntries.length,
       incomeCount: incomeEntries.length,
       expenseCount: expenseEntries.length,
       activeCategories: cats,
@@ -441,6 +450,29 @@ export default function Dashboard() {
                     {expenseCount} expenses
                   </p>
                 </div>
+
+                {transferCount > 0 && (
+                  <div
+                    className={`rounded-xl p-5 shadow-sm transition-colors duration-200 ${
+                      darkMode ? "border border-gray-700" : ""
+                    }`}
+                    style={cardStyle}
+                  >
+                    <div className="mb-2 flex items-center gap-2">
+                      <ArrowLeftRight className="h-4 w-4 text-sky-500" />
+                      <span
+                        className={`text-sm font-medium ${darkMode ? "text-gray-300" : "text-gray-600"}`}
+                      >
+                        Transfers
+                      </span>
+                      <span className={badgeClass}>{defaultCurrency}</span>
+                    </div>
+                    <p className="text-2xl font-bold text-sky-600">{amount(transferTotal)}</p>
+                    <p className={`mt-1 text-xs ${darkMode ? "text-gray-500" : "text-gray-400"}`}>
+                      {transferCount} moved between your accounts, not counted as spending
+                    </p>
+                  </div>
+                )}
 
                 <div
                   className={`rounded-xl p-5 shadow-sm transition-colors duration-200 ${
