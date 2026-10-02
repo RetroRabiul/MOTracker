@@ -21,7 +21,12 @@ import {
   Moon,
   Sun,
   Coins,
+  MessageSquare,
+  ChevronRight,
+  SlidersHorizontal,
 } from "lucide-react";
+import { configureSmsCapture, isSmsImportSupported } from "../services/smsService";
+import { activeSenders, loadAutoCapture, loadRules, saveAutoCapture } from "../lib/smsRules";
 
 const paletteOptions: { key: ColorPalette; label: string; color: string }[] = [
   { key: "amethyst", label: "Amethyst", color: "#8b5cf6" },
@@ -38,6 +43,7 @@ export default function Settings() {
   const { defaultCurrency, setDefaultCurrency } = useSettings();
   const [exporting, setExporting] = useState<string | null>(null);
   const [toast, setToast] = useState<{ tone: ToastTone; message: string } | null>(null);
+  const [autoCapture, setAutoCapture] = useState<boolean>(() => loadAutoCapture());
 
   const handleExport = async (format: "csv" | "excel" | "pdf") => {
     if (!user) return;
@@ -323,6 +329,117 @@ export default function Settings() {
             </button>
           </div>
         </div>
+
+        {/*
+          SMS import reads this device's inbox, which no browser can do, so the
+          entry is only offered where the native plugin can actually work.
+        */}
+        {isSmsImportSupported() && (
+          <div
+            className={`rounded-xl border p-4 shadow-sm transition-colors duration-200 sm:p-6 ${
+              darkMode ? "border-slate-700" : "border-transparent"
+            }`}
+            style={{ backgroundColor: darkMode ? "#1e293b" : colors.primary + "15" }}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                style={{ backgroundColor: colors.primary + "15" }}
+              >
+                <MessageSquare className="h-5 w-5" style={{ color: colors.primary }} />
+              </div>
+              <div className="min-w-0">
+                <h3 className={`font-semibold ${darkMode ? "text-white" : "text-gray-900"}`}>
+                  Import from SMS
+                </h3>
+                <p className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                  Turn bKash or bank messages into transactions
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button
+                onClick={() => navigate("/sms-import")}
+                className={`flex items-center gap-3 rounded-lg border p-4 text-left transition ${
+                  darkMode
+                    ? "border-slate-700 bg-slate-900/70 hover:bg-slate-800"
+                    : "border-gray-200 bg-gray-50 hover:bg-gray-100"
+                }`}
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50">
+                  <MessageSquare className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm font-semibold ${darkMode ? "text-white" : "text-gray-900"}`}>
+                    Scan inbox
+                  </p>
+                  <p className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                    Review before anything is added
+                  </p>
+                </div>
+                <ChevronRight
+                  className={`h-5 w-5 ${darkMode ? "text-gray-400" : "text-gray-400"}`}
+                  aria-hidden="true"
+                />
+              </button>
+
+              <button
+                onClick={() => navigate("/sms-rules")}
+                className={`flex items-center gap-3 rounded-lg border p-4 text-left transition ${
+                  darkMode
+                    ? "border-slate-700 bg-slate-900/70 hover:bg-slate-800"
+                    : "border-gray-200 bg-gray-50 hover:bg-gray-100"
+                }`}
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50">
+                  <SlidersHorizontal className="h-5 w-5 text-violet-600" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm font-semibold ${darkMode ? "text-white" : "text-gray-900"}`}>
+                    Sender rules
+                  </p>
+                  <p className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                    Choose which numbers are read
+                  </p>
+                </div>
+                <ChevronRight
+                  className={`h-5 w-5 ${darkMode ? "text-gray-400" : "text-gray-400"}`}
+                  aria-hidden="true"
+                />
+              </button>
+            </div>
+
+            {/*
+              Automatic capture runs in a native receiver with no web layer
+              attached, so the sender list has to be pushed to it whenever the
+              preference or the rules change.
+            */}
+            <div className="mt-4 border-t border-black/5 pt-4 dark:border-white/10">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={autoCapture}
+                  onChange={(e) => {
+                    setAutoCapture(e.target.checked);
+                    saveAutoCapture(e.target.checked);
+                    void configureSmsCapture(activeSenders(loadRules()), e.target.checked);
+                  }}
+                  className="mt-0.5 h-5 w-5 shrink-0"
+                />
+                <span className="min-w-0">
+                  <span className={`block text-sm font-semibold ${darkMode ? "text-white" : "text-gray-900"}`}>
+                    Watch for new messages
+                  </span>
+                  <span className={`mt-0.5 block text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                    Picks up alerts from your saved senders while the app is closed. They are queued for
+                    you to review, never added automatically, and only matching senders are stored.
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
+        )}
 
         <div
           className={`rounded-xl border p-4 shadow-sm transition-colors duration-200 sm:p-6 ${

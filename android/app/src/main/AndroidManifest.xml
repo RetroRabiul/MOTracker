@@ -24,6 +24,16 @@
 
         </activity>
 
+        <receiver
+            android:name=".SmsReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -38,4 +48,21 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      Lets the user import their own bKash/bank alerts as transactions.
+      Only messages from senders the user explicitly lists are ever surfaced to
+      the app, and the query is bounded by a date the user chooses. This is a
+      Google Play restricted permission; see the SMS import docs before any
+      store submission.
+    -->
+    <uses-permission android:name="android.permission.READ_SMS" />
+
+    <!--
+      Needed so new messages from a configured sender are noticed while the app
+      is closed. SMS_RECEIVED is exempt from the Android 8 implicit-broadcast
+      limits, so the receiver does not need to be running to be delivered.
+      Also a Google Play restricted permission.
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
 </manifest>

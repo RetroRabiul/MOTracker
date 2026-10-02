@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, RESET_PASSWORD_PATH } from "./context/AuthContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
@@ -16,12 +17,37 @@ import Analytics from "./pages/Analytics";
 import Export from "./pages/Export";
 import Settings from "./pages/Settings";
 import ResetPassword from "./pages/ResetPassword";
+import SmsImport from "./pages/SmsImport";
+import SmsRules from "./pages/SmsRules";
 import { isNativeApp, NOT_FOUND_ROUTE } from "./lib/platform";
+import {
+  configureSmsCapture,
+  hasSmsPermission,
+  isSmsImportSupported,
+} from "./services/smsService";
+import { activeSenders, loadAutoCapture, loadRules } from "./lib/smsRules";
 
 /** Keeps the Android status bar icons legible against the current theme. */
 function NativeThemeSync() {
   const { darkMode } = useTheme();
   useStatusBarTheme(darkMode);
+  return null;
+}
+
+/**
+ * Pushes the sender list to the native receiver on launch.
+ *
+ * The receiver runs with no web layer, so it cannot read localStorage itself.
+ * Without this, a fresh install would never pick up messages until the user
+ * happened to open the import screen or settings first.
+ */
+function SmsCaptureSync() {
+  useEffect(() => {
+    if (!isSmsImportSupported()) return;
+    void hasSmsPermission().then((granted) => {
+      void configureSmsCapture(activeSenders(loadRules()), granted && loadAutoCapture());
+    });
+  }, []);
   return null;
 }
 
@@ -31,6 +57,7 @@ export default function App() {
       <ThemeProvider>
         <SettingsProvider>
           <NativeThemeSync />
+          <SmsCaptureSync />
           <BrowserRouter>
             <Routes>
               <Route
@@ -106,6 +133,22 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <Settings />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/sms-import"
+                element={
+                  <ProtectedRoute>
+                    <SmsImport />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/sms-rules"
+                element={
+                  <ProtectedRoute>
+                    <SmsRules />
                   </ProtectedRoute>
                 }
               />
