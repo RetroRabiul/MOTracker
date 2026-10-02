@@ -396,6 +396,19 @@ function cleanMerchant(raw: string | undefined): string {
     .replace(/[.,;:]+$/, "")
     .trim();
 
+  // A merchant group matches across sentence punctuation, so
+  // "Rahim Store. Avail bal Tk 12,300.50." arrives as one string. Cut at the
+  // first sentence break that is followed by real content, otherwise the
+  // following clause is saved as part of the merchant name.
+  //
+  // Two guards keep abbreviations intact. A sentence needs at least four
+  // characters before the break, which preserves "St." and "Dr.", and the
+  // next sentence must start capitalised, so "St. Martins Mall" and
+  // "Rahim & Co. Ltd" survive. Decimal points need no special case: they are
+  // followed by a digit, not whitespace.
+  const sentenceEnd = /^(.{4,}?)[.?!]\s+[A-Z]/.exec(out);
+  if (sentenceEnd) out = sentenceEnd[1].trim();
+
   // "Rahim Store from bKash" -> "Rahim Store". Only cuts when something
   // recognisable follows, so a merchant that is itself one word is untouched.
   const connector = /\s(?:from|to|at|on|via|using|with|for|by)\s+(.{2,40})$/i.exec(out);

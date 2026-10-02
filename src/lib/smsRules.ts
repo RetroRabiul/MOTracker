@@ -46,7 +46,7 @@ export const STARTER_RULES: SmsRule[] = [
     direction: "expense",
     sender: "bKash",
     pattern:
-      "(?:you have sent|you sent|sent)[\\s\u09f3]*(?:tk|taka)?[\\s\u09f3]*(?<amount>[\\d,.]+)\\s*(?:tk|taka|\u09f3)?[^.]{0,40}?\\bto\\b\\s*(?<merchant>[A-Za-z][A-Za-z .'-]{0,60})",
+      "(?:you have sent|you sent|sent)[\\s\u09f3]*(?:tk|taka)?[\\s\u09f3]*(?<amount>[\\d,.]+)\\s*(?:tk|taka|\u09f3)?[^.]{0,40}?\\bto\\b\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
     defaultCurrency: "BDT",
     category: "Transfer",
     enabled: true,
@@ -57,7 +57,7 @@ export const STARTER_RULES: SmsRule[] = [
     direction: "income",
     sender: "bKash",
     pattern:
-      "(?:you have received|you received|received)[\\s\u09f3]*(?:tk|taka)?[\\s\u09f3]*(?<amount>[\\d,.]+)\\s*(?:tk|taka|\u09f3)?[^.]{0,40}?\\bfrom\\b\\s*(?<merchant>[A-Za-z][A-Za-z .'-]{0,60})",
+      "(?:you have received|you received|received)[\\s\u09f3]*(?:tk|taka)?[\\s\u09f3]*(?<amount>[\\d,.]+)\\s*(?:tk|taka|\u09f3)?[^.]{0,40}?\\bfrom\\b\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
     defaultCurrency: "BDT",
     category: "Transfer",
     enabled: true,
@@ -68,7 +68,7 @@ export const STARTER_RULES: SmsRule[] = [
     direction: "expense",
     sender: "bKash",
     pattern:
-      "cash\\s*out[^.]{0,60}?(?<amount>[\\d,.]+)[^.]{0,40}?(?:from\\s+)?(?:agent|point)\\s*[:\\-]?\\s*(?<merchant>[A-Za-z][A-Za-z .'-]{0,60})",
+      "cash\\s*out[^.]{0,60}?(?<amount>[\\d,.]+)[^.]{0,40}?(?:from\\s+)?(?:agent|point)\\s*[:\\-]?\\s*(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
     defaultCurrency: "BDT",
     category: "Cash",
     enabled: true,
@@ -79,7 +79,7 @@ export const STARTER_RULES: SmsRule[] = [
     direction: "expense",
     sender: "",
     pattern:
-      "(?:debit|dr|withdrawn|withdrawal|paid|purchase|pos)\\b[^0-9]{0,40}(?<amount>[\\d,.]+)\\s*(?:pkr|bdt|usd|inr|rs|tk|\u09f3)?[^.]{0,30}?(?:to\\s+)?(?<merchant>[A-Za-z][A-Za-z .'-]{0,60})",
+      "(?:debit|dr|withdrawn|withdrawal|paid|purchase|pos)\\b[^0-9]{0,40}(?<amount>[\\d,.]+)\\s*(?:pkr|bdt|usd|inr|rs|tk|\u09f3)?[^.]{0,30}?(?:to\\s+)?(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
     defaultCurrency: "USD",
     category: "Transfer",
     enabled: true,
@@ -90,7 +90,7 @@ export const STARTER_RULES: SmsRule[] = [
     direction: "income",
     sender: "",
     pattern:
-      "(?:credit|cr|received|salary|refund)\\b[^0-9]{0,40}(?<amount>[\\d,.]+)\\s*(?:pkr|bdt|usd|inr|rs|tk|\u09f3)?[^.]{0,30}?(?:from\\s+)?(?<merchant>[A-Za-z][A-Za-z .'-]{0,60})",
+      "(?:credit|cr|received|salary|refund)\\b[^0-9]{0,40}(?<amount>[\\d,.]+)\\s*(?:pkr|bdt|usd|inr|rs|tk|\u09f3)?[^.]{0,30}?(?:from\\s+)?(?<merchant>[A-Za-z][A-Za-z &'.-]{0,60})",
     defaultCurrency: "USD",
     category: "Transfer",
     enabled: true,

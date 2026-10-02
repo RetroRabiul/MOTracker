@@ -35,8 +35,12 @@ public class SmsReceiver extends BroadcastReceiver {
         if (!"android.provider.Telephony.SMS_RECEIVED".equals(intent.getAction())) {
             return;
         }
-        // Reading the body requires READ_SMS; without it there is nothing to do.
-        if (context.checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
+        // Reading the body requires READ_SMS. RECEIVE_SMS is checked too: without
+        // it the system would not have delivered this broadcast, so the mismatch
+        // can only mean it was revoked between delivery and handling. Either way
+        // there is nothing useful to do.
+        if (context.checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED
+                || context.checkSelfPermission(Manifest.permission.RECEIVE_SMS) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
         if (!SmsStore.autoCaptureEnabled(context)) {

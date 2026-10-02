@@ -37,12 +37,23 @@ import org.json.JSONObject;
 @CapacitorPlugin(
     name = "SmsReader",
     permissions = {
-        @Permission(strings = { Manifest.permission.READ_SMS }, alias = "readSms")
+        @Permission(
+            strings = { Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS },
+            alias = "sms"
+        )
     }
 )
 public class SmsReaderPlugin extends Plugin {
 
-    private static final String ALIAS = "readSms";
+    /**
+     * One alias covering both permissions, because the feature is unusable with
+     * either one missing:
+     * - READ_SMS is required to query the inbox and to read a broadcast body.
+     * - RECEIVE_SMS is required for SMS_RECEIVED to be delivered at all, so
+     *   requesting only READ_SMS would leave the auto-capture toggle silently
+     *   doing nothing.
+     */
+    private static final String ALIAS = "sms";
     private static final String EVENT_PENDING = "smsPending";
 
     /** Body length beyond which parsing is refused, to bound user regexes. */
@@ -101,11 +112,11 @@ public class SmsReaderPlugin extends Plugin {
             call.resolve(ret);
             return;
         }
-        requestPermissionForAlias(ALIAS, call, "readSmsPermissionCallback");
+        requestPermissionForAlias(ALIAS, call, "smsPermissionCallback");
     }
 
     @PermissionCallback
-    private void readSmsPermissionCallback(PluginCall call) {
+    private void smsPermissionCallback(PluginCall call) {
         JSObject ret = new JSObject();
         ret.put("granted", isGranted());
         call.resolve(ret);
@@ -301,6 +312,12 @@ public class SmsReaderPlugin extends Plugin {
         return out;
     }
 
+    /**
+     * Both permissions must be held. getPermissionState reports GRANTED only
+     * when every permission in the alias is granted, so a user who accepted
+     * READ_SMS but declined RECEIVE_SMS is correctly treated as ungranted
+     * rather than getting a screen that claims to work.
+     */
     private boolean isGranted() {
         return getPermissionState(ALIAS) == PermissionState.GRANTED;
     }
