@@ -3,12 +3,15 @@ import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowLeftRight,
   Check,
   ChevronRight,
   Loader2,
   MessageSquare,
   ShieldAlert,
   Trash2,
+  TrendingDown,
+  TrendingUp,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useSettings } from "../context/SettingsContext";
@@ -35,6 +38,7 @@ import {
   type ParsedCandidate,
   type SmsMessage,
   type SmsRule,
+  type SmsDirection,
 } from "../lib/smsParser";
 import { proposeRules, type RuleProposal } from "../lib/smsLearner";
 import {
@@ -55,7 +59,7 @@ import {
   savePlatforms,
   type SmsPlatform,
 } from "../lib/smsPlatforms";
-import { formatCurrency } from "../types/expense";
+import { formatCurrency, CURRENCIES, EXPENSE_CATEGORIES, INCOME_CATEGORIES, TRANSFER_CATEGORIES } from "../types/expense";
 import ConfirmDialog from "../components/ConfirmDialog";
 import Toast, { type ToastTone } from "../components/Toast";
 
@@ -981,14 +985,50 @@ interface CandidateRowProps {
   onSkip: () => void;
 }
 
+const TYPES = ["expense", "income", "transfer"] as const;
+const LABELS = { expense: "Expense", income: "Income", transfer: "Transfer" } as const;
+
 /**
  * One parsed message. Every extracted field is editable, because the user is
  * the only one who can tell whether a message is really a transaction.
  */
 function CandidateRow({ candidate, darkMode, saving, onChange, onApprove, onSkip }: CandidateRowProps) {
+  const { colors } = useTheme();
   const [open, setOpen] = useState(false);
   const blocked = !!candidate.problem || candidate.amount <= 0;
   const band = confidenceBand(candidate.confidence);
+
+  /**
+   * The same lists Add Data offers, so a message cannot be saved with a
+   * category that no amount of manual entry would have produced.
+   */
+  const categories: readonly string[] =
+    candidate.type === "expense"
+      ? EXPENSE_CATEGORIES
+      : candidate.type === "income"
+        ? INCOME_CATEGORIES
+        : TRANSFER_CATEGORIES;
+
+  /**
+   * Changing the type changes which categories are valid, so the old value is
+   * almost never still on the list. Falling back to "Other" (a member of all
+   * three) keeps the row submittable instead of leaving the select on a value
+   * that is no longer offered.
+   */
+  function onTypeChange(next: SmsDirection) {
+    if (next === candidate.type) return;
+    const nextList: readonly string[] =
+      next === "expense" ? EXPENSE_CATEGORIES : next === "income" ? INCOME_CATEGORIES : TRANSFER_CATEGORIES;
+    onChange({
+      type: next,
+      category: nextList.includes(candidate.category) ? candidate.category : "Other",
+      // Confidence described the original read. Once the user overrides the
+      // type the number no longer says how the row was produced, so it is
+      // cleared rather than left asserting a rule read something that was then
+      // changed.
+      confidence: 0,
+    });
+  }
 
   const bandColor = blocked
     ? "bg-red-500"
@@ -1034,6 +1074,36 @@ function CandidateRow({ candidate, darkMode, saving, onChange, onApprove, onSkip
           )}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Type</span>
+              <div className="flex gap-2">
+                {TYPES.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => onTypeChange(option)}
+                    aria-pressed={candidate.type === option}
+                    className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2 text-sm font-semibold transition ${
+                      candidate.type === option
+                        ? "text-white shadow-sm"
+                        : darkMode
+                          ? "text-gray-400 hover:text-white"
+                          : "text-gray-600 hover:text-gray-900"
+                    }`}
+                    style={candidate.type === option ? { backgroundColor: colors.primary } : {}}
+                  >
+                    {option === "expense" ? (
+                      <TrendingDown className="h-4 w-4" aria-hidden="true" />
+                    ) : option === "income" ? (
+                      <TrendingUp className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {LABELS[option]}
+                  </button>
+                ))}
+              </div>
+            </div>
             <Field label="Amount">
               <input
                 type="number"
@@ -1045,12 +1115,27 @@ function CandidateRow({ candidate, darkMode, saving, onChange, onApprove, onSkip
               />
             </Field>
             <Field label="Currency">
-              <input
-                type="text"
+              <select
                 value={candidate.currency}
-                onChange={(e) => onChange({ currency: e.target.value.toUpperCase().slice(0, 3) })}
-                className="w-full rounded-lg border border-black/10 bg-white px-3 py-2.5 text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-white/15 dark:bg-gray-800 dark:text-white"
-              />
+                onChange={(e) => onChange({ currency: e.target.value })}
+                className={`w-full appearance-none rounded-lg border px-3 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  darkMode
+                    ? "border-white/15 bg-gray-800 text-white"
+                    : "border-black/10 bg-white text-gray-900"
+                }`}
+              >
+                {/* A currency the learner read that no longer exists in settings
+                    would silently break every total it appears in, so it stays
+                    selectable instead of being dropped from the list. */}
+                {!CURRENCIES.some((c) => c.code === candidate.currency) && (
+                  <option value={candidate.currency}>{candidate.currency} (unknown)</option>
+                )}
+                {CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.symbol} {c.code}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Date">
               <input
@@ -1061,12 +1146,28 @@ function CandidateRow({ candidate, darkMode, saving, onChange, onApprove, onSkip
               />
             </Field>
             <Field label="Category">
-              <input
-                type="text"
+              <select
                 value={candidate.category}
                 onChange={(e) => onChange({ category: e.target.value })}
-                className="w-full rounded-lg border border-black/10 bg-white px-3 py-2.5 text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-white/15 dark:bg-gray-800 dark:text-white"
-              />
+                className={`w-full appearance-none rounded-lg border px-3 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  darkMode
+                    ? "border-white/15 bg-gray-800 text-white"
+                    : "border-black/10 bg-white text-gray-900"
+                }`}
+              >
+                {/* The same escape hatch as currency: a category the learner
+                    invented is offered rather than replaced underfoot, since
+                    silently swapping it would change what the user is agreeing
+                    to add. */}
+                {!categories.includes(candidate.category) && (
+                  <option value={candidate.category}>{candidate.category} (not in this list)</option>
+                )}
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
             </Field>
             <div className="sm:col-span-2">
               <Field label="Merchant / description">
