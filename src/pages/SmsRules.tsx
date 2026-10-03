@@ -236,14 +236,14 @@ export default function SmsRules() {
                   type="button"
                   onClick={quickAddPlatform}
                   disabled={quickNumber.trim().length === 0}
-                  className="min-h-[2.5rem] rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                  className="min-h-[2.75rem] rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
                 >
                   Add source
                 </button>
                 <button
                   type="button"
                   onClick={() => setQuickOpen(false)}
-                  className="min-h-[2.5rem] rounded-lg border border-black/10 px-4 text-sm font-semibold text-gray-700 dark:border-white/15 dark:text-gray-300"
+                  className="min-h-[2.75rem] rounded-lg border border-black/10 px-4 text-sm font-semibold text-gray-700 dark:border-white/15 dark:text-gray-300"
                 >
                   Cancel
                 </button>
@@ -323,7 +323,7 @@ export default function SmsRules() {
                         <button
                           type="button"
                           onClick={() => patchPlatform(platform.id, { numbers: [...platform.numbers, ""] })}
-                          className="mt-2 inline-flex min-h-[2.5rem] items-center gap-1.5 text-xs font-medium text-blue-600 underline-offset-4 hover:underline dark:text-blue-400"
+                          className="mt-2 inline-flex min-h-[2.75rem] items-center gap-1.5 text-xs font-medium text-blue-600 underline-offset-4 hover:underline dark:text-blue-400"
                         >
                           <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                           Add another number

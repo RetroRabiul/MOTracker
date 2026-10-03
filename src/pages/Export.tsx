@@ -228,7 +228,7 @@ export default function Export() {
                         {label}
                       </p>
                       <span
-                        className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                        className={`rounded-md px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${
                           darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-200 text-gray-600"
                         }`}
                       >

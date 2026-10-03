@@ -1083,7 +1083,7 @@ function CandidateRow({ candidate, darkMode, saving, onChange, onApprove, onSkip
                     type="button"
                     onClick={() => onTypeChange(option)}
                     aria-pressed={candidate.type === option}
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2 text-sm font-semibold transition ${
+                    className={`flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 rounded-md py-2 text-sm font-semibold transition ${
                       candidate.type === option
                         ? "text-white shadow-sm"
                         : darkMode

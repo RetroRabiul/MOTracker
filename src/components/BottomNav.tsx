@@ -92,7 +92,7 @@ export default function BottomNav() {
               to={to}
               aria-label={label}
               className={({ isActive }) =>
-                `relative flex min-h-[3.5rem] flex-col items-center justify-center gap-0.5 px-1 pt-1.5 pb-1 text-[11px] font-medium transition ${
+                `relative flex min-h-[3.5rem] flex-col items-center justify-center gap-0.5 px-1 pt-1.5 pb-1 text-xs font-medium transition ${
                   isActive
                     ? "font-semibold"
                     : darkMode

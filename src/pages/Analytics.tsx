@@ -260,7 +260,7 @@ export default function Analytics() {
                   key={r.key}
                   onClick={() => setTimeRange(r.key)}
                   aria-pressed={timeRange === r.key}
-                  className={`min-h-[2.75rem] shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition sm:min-h-0 sm:border-0 sm:px-3 ${
+                  className={`min-h-[2.75rem] min-w-[2.75rem] shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition sm:min-h-0 sm:border-0 sm:px-3 ${
                     timeRange === r.key
                       ? "border-transparent text-white"
                       : darkMode
@@ -328,7 +328,7 @@ export default function Analytics() {
             >
               <span>All amounts shown in</span>
               <span
-                className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                className={`rounded-md px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${
                   darkMode ? "bg-gray-700 text-gray-300" : "bg-white text-gray-600 shadow-sm"
                 }`}
               >
@@ -368,13 +368,13 @@ export default function Analytics() {
                       <XAxis
                         dataKey="date"
                         stroke={darkMode ? "#64748b" : "#9ca3af"}
-                        fontSize={11}
+                        fontSize={12}
                         tickLine={false}
                         axisLine={false}
                       />
                         <YAxis
                           stroke={darkMode ? "#64748b" : "#9ca3af"}
-                          fontSize={11}
+                          fontSize={12}
                           tickLine={false}
                           axisLine={false}
                           tickFormatter={compactAxisValue}

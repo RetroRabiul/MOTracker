@@ -187,7 +187,7 @@ export default function Dashboard() {
   }, [conversion.converted, timeRange]);
 
   const cardStyle = { backgroundColor: darkMode ? "#1e293b" : colors.primary + "15" };
-  const badgeClass = `ml-auto rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+  const badgeClass = `ml-auto rounded-md px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${
     darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-200 text-gray-600"
   }`;
 
@@ -233,7 +233,7 @@ export default function Dashboard() {
             </span>
             <button
               onClick={toggleDarkMode}
-              className={`rounded-lg p-2 transition ${
+              className={`flex h-11 w-11 items-center justify-center rounded-lg transition ${
                 darkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-600 hover:bg-gray-100"
               }`}
               title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
@@ -242,7 +242,7 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => void logout()}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+              className={`flex min-h-[2.75rem] items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-medium transition ${
                 darkMode
                   ? "border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700"
                   : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
@@ -364,13 +364,13 @@ export default function Dashboard() {
                         <XAxis
                           dataKey="date"
                           stroke={darkMode ? "#64748b" : "#9ca3af"}
-                          fontSize={11}
+                          fontSize={12}
                           tickLine={false}
                           axisLine={false}
                         />
                         <YAxis
                           stroke={darkMode ? "#64748b" : "#9ca3af"}
-                          fontSize={11}
+                          fontSize={12}
                           tickLine={false}
                           axisLine={false}
                           tickFormatter={compactAxisValue}

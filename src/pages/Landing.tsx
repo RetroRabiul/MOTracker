@@ -371,7 +371,7 @@ export default function Landing() {
                   This month
                 </p>
                 <span
-                  className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                  className={`rounded-md px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${
                     darkMode ? "bg-slate-700 text-slate-300" : "bg-white text-gray-500"
                   }`}
                 >
@@ -390,7 +390,7 @@ export default function Landing() {
                     darkMode ? "bg-slate-800/70" : "bg-white/70"
                   }`}
                 >
-                  <p className={`text-[11px] ${mutedText}`}>Income</p>
+                  <p className={`text-xs ${mutedText}`}>Income</p>
                   <p className="mt-0.5 flex items-center text-sm font-bold text-emerald-500">
                     <TrendingUp className="mr-1 h-3.5 w-3.5" />
                     $3,200
@@ -401,7 +401,7 @@ export default function Landing() {
                     darkMode ? "bg-slate-800/70" : "bg-white/70"
                   }`}
                 >
-                  <p className={`text-[11px] ${mutedText}`}>Expenses</p>
+                  <p className={`text-xs ${mutedText}`}>Expenses</p>
                   <p className="mt-0.5 flex items-center text-sm font-bold text-red-500">
                     <TrendingDown className="mr-1 h-3.5 w-3.5" />
                     $1,760
@@ -501,7 +501,7 @@ export default function Landing() {
             >
               {plan.highlighted && (
                 <span
-                  className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white"
+                  className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide text-white"
                   style={{ backgroundColor: colors.primary }}
                 >
                   Most popular

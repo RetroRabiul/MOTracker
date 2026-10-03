@@ -225,7 +225,7 @@ export default function AddData() {
               <button
                 type="button"
                 onClick={() => handleTypeChange("expense")}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2.5 text-sm font-semibold transition ${
+                className={`flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 rounded-md py-2.5 text-sm font-semibold transition ${
                   type === "expense"
                     ? "text-white shadow-sm"
                     : darkMode
@@ -240,7 +240,7 @@ export default function AddData() {
               <button
                 type="button"
                 onClick={() => handleTypeChange("income")}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2.5 text-sm font-semibold transition ${
+                className={`flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 rounded-md py-2.5 text-sm font-semibold transition ${
                   type === "income"
                     ? "text-white shadow-sm"
                     : darkMode
@@ -255,7 +255,7 @@ export default function AddData() {
               <button
                 type="button"
                 onClick={() => handleTypeChange("transfer")}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2.5 text-sm font-semibold transition ${
+                className={`flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 rounded-md py-2.5 text-sm font-semibold transition ${
                   type === "transfer"
                     ? "text-white shadow-sm"
                     : darkMode
@@ -381,7 +381,7 @@ export default function AddData() {
                     key={chip.label}
                     type="button"
                     onClick={() => setCategory(chip.label)}
-                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                    className={`flex min-h-[2.75rem] items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
                       isActive
                         ? "text-white"
                         : darkMode
