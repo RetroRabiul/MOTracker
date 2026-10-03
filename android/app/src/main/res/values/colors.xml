@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Solid brand colour for the Android 12+ system splash, which only accepts a
+      colour rather than a drawable. Matched to the middle of the gradient in
+      @drawable/splash so the hand-off from the system splash to the Capacitor
+      splash does not shift hue.
+    -->
+    <color name="splashBackground">#6d28d9</color>
+</resources>

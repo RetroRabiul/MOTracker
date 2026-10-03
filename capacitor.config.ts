@@ -17,9 +17,18 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
-      backgroundColor: "#2563eb",
-      showSpinner: true,
-      spinnerColor: "#ffffff",
+      // The Capacitor plugin paints its own window over the Android system
+      // splash, so it needs a colour of its own. Matched to the middle stop of
+      // the gradient in @drawable/splash so the hand-off does not shift hue.
+      //
+      // Pointing `androidSplashResourceName` at the splash drawable was tried
+      // and reverted: on this device it resolved to a black window rather than
+      // the layer-list. The icon is supplied to the system splash via
+      // windowSplashScreenAnimatedIcon in styles.xml instead.
+      backgroundColor: "#6d28d9",
+      // The mark is already shown by the system splash; a spinner on top of it
+      // read as two competing pieces of loading UI.
+      showSpinner: false,
     },
     // The app targets SDK 36, so Android 15+ lays the WebView out edge to edge.
     // SystemBars applies the insets natively and publishes them to CSS as

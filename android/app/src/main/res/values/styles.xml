@@ -16,7 +16,24 @@
     </style>
 
 
+    <!--
+      Launch theme.
+
+      This was `parent="Theme.SplashScreen"` with a single `android:background`
+      item. Theme.SplashScreen is the AndroidX splash API, which reads
+      windowSplashScreen* attributes and ignores android:background, so the
+      window fell back to the platform default and the splash rendered as a flat
+      #1d1b1e rectangle. The artwork was never actually shown.
+    -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <!-- Android 12+ draws these itself: a solid colour with the icon
+             centred and masked. -->
+        <item name="windowSplashScreenBackground">@color/splashBackground</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+
+        <!-- API 24-30, where the compat implementation cannot draw the icon, so
+             the full layer-list is used as the window background instead. -->
+        <item name="android:windowBackground">@drawable/splash</item>
     </style>
 </resources>

@@ -44,3 +44,6 @@ android/app/src/main/assets/capacitor.config.json
 # Build artefacts
 public/app.apk
 public/app-debug.apk
+
+__pycache__/
+

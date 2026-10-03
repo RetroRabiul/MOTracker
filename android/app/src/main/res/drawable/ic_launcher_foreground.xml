@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MOTracker mark: a rising trend line whose first segment doubles as the left
+  half of an M, so the glyph carries both meanings at 48dp.
+
+  Drawn inside the 108dp adaptive-icon canvas but held to the middle 66dp,
+  which is the only region a launcher mask is guaranteed not to clip. Anything
+  outside that gets eaten by circular and squircle masks, so the mark is kept
+  deliberately small and centred.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Rising baseline: the left stroke is taller than the right, so the shape
+         also reads as an M leaning upward. -->
+    <path
+        android:pathData="M30,74 L30,52 L42,64 L54,44 L66,56"
+        android:strokeColor="#ffffff"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Arrow head closing the trend. -->
+    <path
+        android:pathData="M66,56 L78,56 L78,68"
+        android:strokeColor="#ffffff"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Coin slot: a second, shorter bar under the trend. Reads as currency
+         without adding detail that would muddy the mark at launcher size. -->
+    <path
+        android:pathData="M42,78 L66,78"
+        android:strokeColor="#ffffff"
+        android:strokeAlpha="0.55"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+</vector>

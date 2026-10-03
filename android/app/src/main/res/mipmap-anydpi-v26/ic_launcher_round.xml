@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Points at the vector drawables rather than @mipmap/ic_launcher_foreground.
+  That reference resolved to a set of pre-rendered PNGs, so the icon could only
+  be changed by redrawing five raster sizes by hand and the vector was dead
+  weight. Referencing the drawables keeps one source of truth.
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/ic_launcher_background"/>
-    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+    <background android:drawable="@drawable/ic_launcher_background"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+    <monochrome android:drawable="@drawable/ic_launcher_foreground"/>
 </adaptive-icon>
