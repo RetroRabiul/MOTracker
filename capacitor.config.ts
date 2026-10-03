@@ -2,7 +2,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "com.expensetracker.app",
-  appName: "ExpenseTracker",
+  appName: "MOTracker",
   webDir: "dist",
   server: {
     androidScheme: "https",

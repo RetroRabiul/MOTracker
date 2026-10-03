@@ -184,7 +184,7 @@ export default function Landing() {
               <Receipt className="h-5 w-5 text-white" />
             </span>
             <span className={`text-lg font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>
-              ExpenseTracker
+              MOTracker
             </span>
           </Link>
 
@@ -325,7 +325,7 @@ export default function Landing() {
               Know exactly where your money goes.
             </h1>
             <p className={`mt-4 text-lg leading-relaxed ${mutedText}`}>
-              ExpenseTracker turns everyday spending into a clear picture. Log income and
+              MOTracker turns everyday spending into a clear picture. Log income and
               expenses, snap a receipt, and watch the balance, the charts and the exports update in
               real time.
             </p>
@@ -640,7 +640,7 @@ export default function Landing() {
               <Receipt className="h-4 w-4 text-white" />
             </span>
             <span className={`text-sm font-semibold ${darkMode ? "text-white" : "text-gray-900"}`}>
-              ExpenseTracker
+              MOTracker
             </span>
           </div>
           <div className="flex items-center gap-6">
@@ -654,7 +654,7 @@ export default function Landing() {
               Pricing
             </a>
           </div>
-          <p className={`text-xs ${mutedText}`}>© {YEAR} ExpenseTracker. All rights reserved.</p>
+          <p className={`text-xs ${mutedText}`}>© {YEAR} MOTracker. All rights reserved.</p>
         </div>
       </footer>
     </div>

@@ -273,7 +273,7 @@ export default function Login() {
             <Receipt className="h-8 w-8 text-white" />
           </div>
           <h1 className={`text-3xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>
-            ExpenseTracker
+            MOTracker
           </h1>
           <p className={`mt-2 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
             Sign in to manage your expenses

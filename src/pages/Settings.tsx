@@ -518,7 +518,7 @@ export default function Settings() {
           {__APK_PUBLISHED__ ? (
             <a
               href="/app.apk"
-              download="ExpenseTracker.apk"
+              download="MOTracker.apk"
               className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition ${
                 darkMode
                   ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
@@ -547,7 +547,7 @@ export default function Settings() {
         </div>
 
         <p className={`text-center text-xs ${darkMode ? "text-slate-500" : "text-gray-400"}`}>
-          ExpenseTracker v1.0
+          MOTracker v1.0
         </p>
       </main>
 

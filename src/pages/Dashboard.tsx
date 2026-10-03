@@ -224,7 +224,7 @@ export default function Dashboard() {
               <Receipt className="h-5 w-5 text-white" />
             </div>
             <h1 className={`text-xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>
-              ExpenseTracker
+              MOTracker
             </h1>
           </div>
           <div className="flex items-center gap-4">
